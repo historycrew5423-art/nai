@@ -579,7 +579,7 @@ function director4(dt) {
   spawnAcc += dt * 6;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
-    if (Math.random() < 0.75) spawnEnemy(T.shade, undefined, 17 + Math.random() * 4, 0, 0);
+    if (Math.random() < 0.85) spawnEnemy(T.shade, undefined, 17 + Math.random() * 4, 0, 0);
     else spawnEnemy(Math.random() < 0.5 ? T.drum : T.lute);
   }
 }
@@ -889,7 +889,7 @@ async function die() {
   show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false);
   await playScene([['narrator', DEATH[act]]]);
   const btns = act > 1 ? [['从这一幕重来', 'act'], ['从头开始', 'all']] : [['再来一次', 'all']];
-  const v = await paintingCard(act, { lead: `你在${ACT_NO[act]}幕倒下了。先看看这一幕的名画：`, buttons: btns });
+  const v = await paintingCard(act === 4 ? 'bad' : act, { lead: `你在${ACT_NO[act]}幕倒下了。先看看这一幕的名画：`, buttons: btns });   // 第四幕没有单独的画，用原版结局那幅
   if (v === 'act') beginAct(act, true); else startRun(true);
 }
 
