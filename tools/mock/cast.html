@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>角色参考图</title>
+<style>html,body{margin:0;background:#fff;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../../vendor/three/three.module.js", "three/addons/": "../../vendor/three/addons/" } }</script>
+</head><body>
+<script type="module">
+// 给出图接口当角色参考用：白底，一个角色的正面和四分之三侧面并排。?m=fantasy|wedding-dress|minotaur|rabbit
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const name = new URLSearchParams(location.search).get('m') || 'fantasy';
+const W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+r.setScissorTest(true);
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(2, 4, 5); scene.add(key);
+
+const gltf = await new GLTFLoader().loadAsync(`../../assets/models/${name}.glb`);
+const obj = gltf.scene; scene.add(obj);
+const box = new THREE.Box3().setFromObject(obj);
+const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+obj.position.sub(c);
+const h = size.y;
+const cam = new THREE.PerspectiveCamera(30, (W / 2) / H, 0.01, 100);
+const d = h * 0.62 / Math.tan(THREE.MathUtils.degToRad(15));
+for (const [i, ang] of [[0, 0], [1, -0.7]]) {
+  cam.position.set(Math.sin(ang) * d, h * 0.05, Math.cos(ang) * d); cam.lookAt(0, 0, 0);
+  r.setViewport(i * W / 2, 0, W / 2, H); r.setScissor(i * W / 2, 0, W / 2, H);
+  r.render(scene, cam);
+}
+document.title = 'ready';
+</script>
+</body></html>

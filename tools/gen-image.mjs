@@ -3,7 +3,8 @@
 // 图片下载后缩到最长边 1600 像素以内（用户要求不能超过 2000 像素）。
 // 密钥不进仓库：从环境变量 FNKO_API_KEY 或仓库外的 /projects/sandbox/.tools/fnko/.key 读取。
 // 依赖：sharp（见 tools/process-models.mjs 开头的安装方法）。
-// 用法：node tools/gen-image.mjs <文件名> <比例，如 1:1 或 16:9> <提示词文件>
+// 用法：node tools/gen-image.mjs <文件名> <比例，如 1:1 或 16:9> <提示词文件> [参考图网址 ...]
+// 参考图要是公开网址（比如仓库里图片的 raw.githubusercontent.com 地址），这个模型最多 10 张。
 import { readFile, writeFile, appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,7 @@ const SIZE = '1K';
 const BASE = 'https://fanke2026.xyz/v1';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const [name, ratio = '1:1', promptFile] = process.argv.slice(2);
+const [name, ratio = '1:1', promptFile, ...refs] = process.argv.slice(2);
 if (!name || !promptFile) { console.error('用法：node tools/gen-image.mjs <文件名> <比例> <提示词文件>'); process.exit(1); }
 const prompt = (await readFile(promptFile, 'utf8')).trim();
 const key = process.env.FNKO_API_KEY || (await readFile('/projects/sandbox/.tools/fnko/.key', 'utf8')).trim();
@@ -31,10 +32,11 @@ const price = (m.resolution_prices && m.resolution_prices[SIZE]) || m.price;
 if (!price || price.amount !== ALLOWED_YUAN || price.unit !== 'request') {
   throw new Error(`价格不是每张 ${ALLOWED_YUAN} 元，不提交：${JSON.stringify(price)}`);
 }
+if (refs.length > (m.max_image_refs ?? 0)) throw new Error(`参考图 ${refs.length} 张，超过上限 ${m.max_image_refs}`);
 
 // 2. 提交（同一个请求编号，超时重试不会重复扣费）
 const reqId = `nai-${name}-${Date.now()}`;
-const body = JSON.stringify({ model: MODEL_ID, prompt, ratio, imageSize: SIZE, image_urls: [] });
+const body = JSON.stringify({ model: MODEL_ID, prompt, ratio, imageSize: SIZE, image_urls: refs });
 let res, data;
 for (let attempt = 0; attempt < 4; attempt++) {
   try {
@@ -72,5 +74,5 @@ const meta2 = await sharp(out).metadata();
 const cost = data.cost_yuan;
 const t = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 await appendFile(path.join(outDir, '生成记录.md'),
-  `\n## ${name}.png（${t}）\n- 模型：${MODEL_NAME}，${SIZE}，比例 ${ratio}，花费 ${cost ?? '?'} 元（${cost != null ? (cost * 10).toFixed(1) : '?'} 积分）\n- 原图 ${meta.width}×${meta.height}，保存 ${meta2.width}×${meta2.height}\n- 提示词：\n\n> ${prompt.replace(/\n/g, '\n> ')}\n`);
+  `\n## ${name}.png（${t}）\n- 模型：${MODEL_NAME}，${SIZE}，比例 ${ratio}，花费 ${cost ?? '?'} 元（${cost != null ? (cost * 10).toFixed(1) : '?'} 积分）\n- 原图 ${meta.width}×${meta.height}，保存 ${meta2.width}×${meta2.height}\n${refs.length ? `- 参考图：${refs.map((u) => '<' + u + '>').join('、')}\n` : ''}- 提示词：\n\n> ${prompt.replace(/\n/g, '\n> ')}\n`);
 console.log(JSON.stringify({ name, saved: path.relative(root, out), original: `${meta.width}x${meta.height}`, saved_size: `${meta2.width}x${meta2.height}`, cost_yuan: cost, job: data.job_id }));
