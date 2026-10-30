@@ -134,3 +134,9 @@ body.portrait #rotate { display: flex; }
 #acttitle b { font-size: calc(var(--u) * 8); font-weight: normal; color: #ffd99a; letter-spacing: .2em; text-shadow: 0 0 calc(var(--u) * 3) rgba(255,184,92,.6), 0 2px 4px #000; }
 #acttitle.pop { animation: acttitle 2.6s ease-out forwards; }
 @keyframes acttitle { 0% { opacity: 0; transform: scale(.92); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+#calm { position: absolute; left: 50%; top: calc(var(--u) * 2.2); transform: translateX(-50%); width: calc(var(--u) * 60); text-align: center; }
+#calm b { font-size: calc(var(--u) * 2.6); font-weight: normal; color: #f2ede4; letter-spacing: .1em; text-shadow: 0 1px 3px #000; }
+#calm .bossbar { height: calc(var(--u) * 1.6); margin-top: calc(var(--u) * .5); background: rgba(10,8,14,.7); border: 1px solid #d9a441; border-radius: 99px; overflow: hidden; }
+#calm .bossbar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #f2ede4, #ffd99a); box-shadow: 0 0 8px #ffb85c; }
+#calm.hit .bossbar { border-color: #ff6a6a; box-shadow: 0 0 10px #ff4a4a; }
+#calm.hit b { color: #ffb0b0; }

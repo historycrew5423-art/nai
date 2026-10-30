@@ -1,4 +1,4 @@
-// 正式游戏 v0.2：第一幕「舞会」、第二幕「阳台」（花园）。
+// 正式游戏 v0.2：四幕。舞会 → 阳台（花园）→ 决斗（广场）→ 墓室（守住沉睡的朱丽叶，两种结局）。
 // 玩法：双摇杆，罗密欧唱情歌射出音符；怪被打动后变成萤火，捡了升级，三选一技能。
 // 地图没有边界：地面和障碍物按 40 米一块无缝重复，玩家走到哪铺到哪（docs/场景规格.md 开头）。
 // 怪物的 3D 模型还没有，先用参考图做的立牌（assets/sprites/）。
@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Input } from './input.js';
 import { byId, drawCards, baseStats } from './skills.js';
-import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
+import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -128,8 +128,40 @@ function gardenFloor() {
   }, true);
 }
 
+// 广场地面：粉色和赭色的旧石板，2 米一块（40 米正好 20 块），压暗、低对比
+function piazzaFloor() {
+  return canvasTex(1024, (g, S) => {
+    let seed = 23; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const n = 20, cell = S / n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const v = rnd() * 14 - 7, warm = rnd() < 0.5;
+      g.fillStyle = warm ? `rgb(${104 + v | 0},${74 + v | 0},${66 + v | 0})` : `rgb(${96 + v | 0},${76 + v | 0},${58 + v | 0})`;
+      g.fillRect(x * cell, y * cell, cell, cell);
+      for (let k = 0; k < 30; k++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.12})`; g.fillRect(x * cell + rnd() * cell, y * cell + rnd() * cell, 3, 3); }
+    }
+    g.strokeStyle = 'rgba(30,18,20,.55)'; g.lineWidth = 3;
+    for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * cell, 0); g.lineTo(i * cell, S); g.stroke(); g.beginPath(); g.moveTo(0, i * cell); g.lineTo(S, i * cell); g.stroke(); }
+  }, true);
+}
+// 墓室地面：灰紫色的大石板，素一点，有磨损
+function tombFloor() {
+  return canvasTex(1024, (g, S) => {
+    let seed = 31; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const n = 10, cell = S / n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const v = rnd() * 10 - 5;
+      g.fillStyle = `rgb(${46 + v | 0},${42 + v | 0},${54 + v | 0})`;
+      g.fillRect(x * cell, y * cell, cell, cell);
+      for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '120,110,140'},${rnd() * 0.08})`; g.fillRect(x * cell + rnd() * cell, y * cell + rnd() * cell, 2 + rnd() * 6, 2 + rnd() * 6); }
+    }
+    g.strokeStyle = 'rgba(8,6,12,.7)'; g.lineWidth = 4;
+    for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * cell, 0); g.lineTo(i * cell, S); g.stroke(); g.beginPath(); g.moveTo(0, i * cell); g.lineTo(S, i * cell); g.stroke(); }
+  }, true);
+}
+
 // ---------- 无限地面 ----------
 const floors = { 1: ballroomFloor() };
+const FLOOR_FN = { 2: gardenFloor, 3: piazzaFloor, 4: tombFloor };
 const floorTex = floors[1]; floorTex.repeat.set(3, 3);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 3, TILE * 3), new THREE.MeshLambertMaterial({ map: floorTex }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -144,7 +176,15 @@ const ACT2_OBS = [
   { kind: 'fountain', x: -11, z: -11, r: 2.0 }, { kind: 'statue', x: 11, z: -11, r: 1.0 }, { kind: 'hedge', x: 11, z: 11, r: 2.0 },
   { kind: 'tree', x: -11, z: 11, r: 0.8 }, { kind: 'tree', x: -15, z: 0, r: 0.8 }, { kind: 'tree', x: 15, z: 0, r: 0.8 },
 ];
-const OBS = { 1: ACT1_OBS, 2: ACT2_OBS };
+const ACT3_OBS = [
+  { kind: 'well', x: -11, z: -11, r: 1.3 }, { kind: 'cart', x: 11, z: -11, r: 1.6 }, { kind: 'column', x: 11, z: 11, r: 0.9 },
+  { kind: 'crates', x: -11, z: 11, r: 1.4 }, { kind: 'stall', x: -15, z: 0, r: 1.6 }, { kind: 'barrels', x: 15, z: 0, r: 0.9 },
+];
+const ACT4_OBS = [
+  { kind: 'coffin', x: -11, z: -11, r: 1.5 }, { kind: 'coffin', x: 11, z: 11, r: 1.5 },
+  { kind: 'pillar', x: 11, z: -11, r: 0.8 }, { kind: 'pillar', x: -11, z: 11, r: 0.8 }, { kind: 'pillar', x: -15, z: 0, r: 0.8 }, { kind: 'pillar', x: 15, z: 0, r: 0.8 },
+];
+const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS };
 const MAT = {
   hedge: new THREE.MeshLambertMaterial({ color: 0x2b5236 }),
   leaf: new THREE.MeshLambertMaterial({ color: 0x2f5c34 }),
@@ -155,6 +195,10 @@ const MAT = {
   wood: new THREE.MeshLambertMaterial({ color: 0x4a3222 }),
   rose: new THREE.MeshLambertMaterial({ color: 0xb0263a, emissive: 0x200408 }),
   coolPool: additive(glowTex('127,227,216'), 0.18),
+  canvas: new THREE.MeshLambertMaterial({ color: 0xd8ccb0 }),
+  redBanner: new THREE.MeshLambertMaterial({ color: 0xa3283a, emissive: 0x200408, side: THREE.DoubleSide }),
+  blueBanner: new THREE.MeshLambertMaterial({ color: 0x2a4a8a, emissive: 0x060a20, side: THREE.DoubleSide }),
+  darkStone: new THREE.MeshLambertMaterial({ color: 0x3a3646 }),
   cloth: new THREE.MeshLambertMaterial({ color: 0x7a2230 }),
   gold: new THREE.MeshLambertMaterial({ color: 0xd9a441, emissive: 0x3a2508 }),
   stone: new THREE.MeshLambertMaterial({ color: 0x5a5262 }),
@@ -223,15 +267,61 @@ function buildTile(act) {
       put('leaf', new THREE.SphereGeometry(0.85, 12, 8), x, 1.75, z);
       for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28; put('orange', new THREE.SphereGeometry(0.1, 6, 4), x + Math.cos(a) * 0.72, 1.6 + Math.sin(k * 1.7) * 0.35, z + Math.sin(a) * 0.72); }
     }
+    else if (o.kind === 'well') {
+      put('stone', new THREE.CylinderGeometry(1.25, 1.3, 0.9, 16, 1, true), x, 0.45, z);
+      put('stone', new THREE.TorusGeometry(1.25, 0.12, 5, 18), x, 0.9, z, Math.PI / 2);
+      put('iron', new THREE.CylinderGeometry(1.15, 1.15, 0.05, 16), x, 0.5, z);
+      for (const dx of [-1.05, 1.05]) put('wood', new THREE.BoxGeometry(0.12, 1.6, 0.12), x + dx, 1.5, z);
+      put('wood', new THREE.BoxGeometry(2.3, 0.12, 0.12), x, 2.3, z);
+    } else if (o.kind === 'cart') {
+      const ry = 0.35;
+      put('wood', new THREE.BoxGeometry(2.8, 0.5, 1.5), x, 0.9, z, 0, ry);
+      for (const [dx, dz] of [[-0.9, 0.8], [0.9, 0.8], [-0.9, -0.8], [0.9, -0.8]]) put('wood', new THREE.TorusGeometry(0.45, 0.07, 4, 12), x + dx * Math.cos(ry) + dz * Math.sin(ry), 0.45, z - dx * Math.sin(ry) + dz * Math.cos(ry), 0, ry);
+      put('canvas', new THREE.CylinderGeometry(0.75, 0.75, 2.6, 10, 1, true, 0, Math.PI), x, 1.15, z, 0, 0, Math.PI / 2, 1);
+      put('wood', new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4), x + 1.2, 1.9, z);
+      put('blueBanner', new THREE.PlaneGeometry(0.7, 0.45), x + 1.55, 2.45, z);
+    } else if (o.kind === 'column') {
+      put('stone', new THREE.BoxGeometry(1.4, 0.4, 1.4), x, 0.2, z);
+      put('marble', new THREE.CylinderGeometry(0.42, 0.48, 1.6, 12), x, 1.2, z);
+      put('marble', new THREE.CylinderGeometry(0.2, 0.32, 0.55, 8), x, 2.2, z);
+      put('marble', new THREE.SphereGeometry(0.16, 8, 6), x, 2.55, z);
+    } else if (o.kind === 'crates') {
+      put('wood', new THREE.BoxGeometry(1.2, 1.0, 1.2), x - 0.5, 0.5, z - 0.3, 0, 0.2);
+      put('wood', new THREE.BoxGeometry(1.1, 0.9, 1.1), x + 0.6, 0.45, z + 0.4, 0, -0.3);
+      put('wood', new THREE.BoxGeometry(0.9, 0.7, 0.9), x, 1.35, z, 0, 0.6);
+      put('orange', new THREE.SphereGeometry(0.12, 6, 4), x + 0.6, 0.98, z + 0.4);
+    } else if (o.kind === 'stall') {
+      put('wood', new THREE.BoxGeometry(2.0, 0.9, 1.2), x, 0.45, z);
+      for (const [dx, dz] of [[-0.9, -0.55], [0.9, -0.55], [-0.9, 0.55], [0.9, 0.55]]) put('wood', new THREE.BoxGeometry(0.08, 2.3, 0.08), x + dx, 1.15, z + dz);
+      for (let k = 0; k < 6; k++) put(k % 2 ? 'canvas' : 'redBanner', new THREE.BoxGeometry(2.2 / 6, 0.06, 1.5), x - 1.1 + (k + 0.5) * 2.2 / 6, 2.3, z);
+      put('redBanner', new THREE.PlaneGeometry(0.6, 0.9), x, 1.6, z + 0.62);
+      for (let k = 0; k < 5; k++) put('orange', new THREE.SphereGeometry(0.1, 6, 4), x - 0.6 + k * 0.3, 0.98, z);
+    } else if (o.kind === 'barrels') {
+      for (const [dx, dz] of [[-0.4, 0], [0.4, 0.1], [0, -0.55]]) put('wood', new THREE.CylinderGeometry(0.36, 0.36, 0.95, 10), x + dx, 0.48, z + dz);
+    } else if (o.kind === 'coffin') {
+      put('darkStone', new THREE.BoxGeometry(2.8, 0.85, 1.4), x, 0.42, z);
+      put('stone', new THREE.BoxGeometry(2.95, 0.15, 1.55), x, 0.92, z);
+      put('marble', new THREE.SphereGeometry(0.22, 8, 6).scale(3.2, 0.6, 1.4), x, 1.05, z);
+      flame(x + 1.6, 0.5, z + 0.9); pool(x, z, 2.6);
+    } else if (o.kind === 'pillar') {
+      put('darkStone', new THREE.BoxGeometry(1.4, 0.4, 1.4), x, 0.2, z);
+      put('stone', new THREE.CylinderGeometry(0.55, 0.6, 2.1, 12), x, 1.45, z);
+      put('darkStone', new THREE.BoxGeometry(1.3, 0.25, 1.3), x, 2.5, z);
+    }
     if (act === 1) {
       for (let k = 0; k < 7; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.6; rose(x + Math.cos(a) * d, z + Math.sin(a) * d); }
       for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = o.r + 0.8 + Math.random() * 1.2; mask(x + Math.cos(a) * d, z + Math.sin(a) * d); }
-    } else {
+    } else if (act === 2) {
       for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28, d = o.r + 0.7 + Math.random() * 1.2; bush(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+    } else if (act === 3) {
+      for (let k = 0; k < 4; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.4; put(k % 2 ? 'orange' : 'rose', new THREE.SphereGeometry(0.09, 5, 4), x + Math.cos(a) * d, 0.09, z + Math.sin(a) * d); }
+    } else {
+      for (let k = 0; k < 4; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.2; rose(x + Math.cos(a) * d, z + Math.sin(a) * d); }
     }
   }
   if (act === 1) { pool(0, 0, 8.5); pool(20, 20, 4.5); pool(-20, 20, 4.5); pool(20, -20, 4.5); pool(-20, -20, 4.5); } // 吊灯照在地上的暖色光斑
-  else { for (const [x, z] of [[-6.6, -6.6], [6.6, 6.6], [6.6, -6.6], [-6.6, 6.6]]) lantern(x, z); }   // 花园：小路边四盏矮灯笼
+  else if (act === 2) { for (const [x, z] of [[-6.6, -6.6], [6.6, 6.6], [6.6, -6.6], [-6.6, 6.6]]) lantern(x, z); }   // 花园：小路边四盏矮灯笼
+  else if (act === 4) { for (const [x, z] of [[-17, -17], [17, 17], [-17, 6], [17, -6]]) { put('iron', new THREE.CylinderGeometry(0.05, 0.08, 0.45, 6), x, 0.22, z); flame(x, 0.55, z); pool(x, z, 2.2); } }
   const g = new THREE.Group();
   for (const [k, list] of Object.entries(parts)) if (list.length) {
     const m = new THREE.Mesh(mergeGeometries(list), MAT[k]);
@@ -240,12 +330,34 @@ function buildTile(act) {
   }
   return g;
 }
+// 第四幕：场地正中间的石台，朱丽叶躺在上面，周围一圈蜡烛（只放一个，不重复）
+const bier = new THREE.Group();
+{
+  const parts = { darkStone: [], stone: [], wax: [], flame: [], glow: [], pool: [] };
+  const add = (k, geo, x, y, z) => { geo.translate(x, y, z); parts[k].push(geo.index ? geo.toNonIndexed() : geo); };
+  add('darkStone', new THREE.BoxGeometry(2.6, 0.8, 1.4), 0, 0.4, 0);
+  add('stone', new THREE.BoxGeometry(2.8, 0.12, 1.6), 0, 0.86, 0);
+  for (let k = 0; k < 14; k++) {
+    const a = k / 14 * Math.PI * 2, x = Math.cos(a) * 2.5, z = Math.sin(a) * 2.1, h = 0.18 + (k % 3) * 0.08;
+    add('wax', new THREE.CylinderGeometry(0.06, 0.06, h, 6), x, h / 2, z);
+    add('flame', new THREE.SphereGeometry(0.06, 6, 4).scale(1, 1.7, 1), x, h + 0.08, z);
+    const gl = new THREE.PlaneGeometry(0.8, 0.8); gl.rotateX(-PITCH); add('glow', gl, x, h + 0.08, z);
+  }
+  const pl = new THREE.PlaneGeometry(9, 9); pl.rotateX(-Math.PI / 2); add('pool', pl, 0, 0.025, 0);
+  for (const [k, list] of Object.entries(parts)) bier.add(new THREE.Mesh(mergeGeometries(list), MAT[k]));
+  bier.visible = false; scene.add(bier);
+}
+const bierLight = new THREE.PointLight(0xffb85c, 22, 11, 1.4); bierLight.position.set(0, 2.2, 0.5); bierLight.visible = false; scene.add(bierLight);
+const BIER_R = 1.45;
+
 let tiles = [], curObs = ACT1_OBS, tileAct = 0;
 let tileIX = 1e9, tileIZ = 1e9;
 // 换一幕：换地面、地块、灯光
 const LOOKS = {
   1: { bg: 0x14121c, hemi: [0x8a90c8, 0x2a1e2a, 1.25], moon: [0x9fb4ff, 0.9] },
   2: { bg: 0x0e1420, hemi: [0x7a92c8, 0x16241f, 1.15], moon: [0xa8c0ff, 1.5] },
+  3: { bg: 0x2a1c26, hemi: [0xffc890, 0x3a2a40, 1.05], moon: [0xffa860, 1.9], sun: [-14, 7, 2] },
+  4: { bg: 0x09090f, hemi: [0x5a6aa0, 0x10101a, 0.8], moon: [0x7fa0ff, 0.5] },
 };
 function setAct(n) {
   if (tileAct !== n) {
@@ -253,7 +365,7 @@ function setAct(n) {
     if (tiles[0]) tiles[0].traverse((o) => o.geometry && o.geometry.dispose());
     const proto = buildTile(n);
     tiles = []; for (let i = 0; i < 9; i++) { const t = proto.clone(); scene.add(t); tiles.push(t); }
-    if (!floors[n]) { floors[n] = gardenFloor(); floors[n].repeat.set(3, 3); }
+    if (!floors[n]) { floors[n] = FLOOR_FN[n](); floors[n].repeat.set(3, 3); }
     floor.material.map = floors[n]; floor.material.needsUpdate = true;
     tileAct = n;
   }
@@ -261,7 +373,8 @@ function setAct(n) {
   const L = LOOKS[n];
   scene.background.setHex(L.bg); scene.fog.color.setHex(L.bg);
   hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
-  moon.color.setHex(L.moon[0]); moon.intensity = L.moon[1];
+  moon.color.setHex(L.moon[0]); moon.intensity = L.moon[1]; moon.position.set(...(L.sun || [-6, 12, -4]));
+  bier.visible = n === 4; bierLight.visible = n === 4;
   tileIX = 1e9; updateTiles(player.x, player.z);
 }
 function updateTiles(px, pz) {
@@ -274,6 +387,7 @@ function updateTiles(px, pz) {
 }
 // 把圆推出障碍物。障碍物离地块边至少 3 米，所以只查自己所在的那一块。
 function pushOut(p, r) {
+  if (act === 4) { const d = Math.hypot(p.x, p.z), rr = BIER_R + r; if (d < rr) { const k = rr / (d || 1e-3); p.x *= k; p.z *= k; } }
   const ox = Math.round(p.x / TILE) * TILE, oz = Math.round(p.z / TILE) * TILE;
   for (const o of curObs) {
     const dx = p.x - (ox + o.x), dz = p.z - (oz + o.z), rr = o.r + r, d2 = dx * dx + dz * dz;
@@ -287,14 +401,18 @@ const TYPES = [
   { key: 'lute', h: 1.55, r: 0.5, hp: 2, speed: 2.1, dmg: 7, xp: 1, flip: false },
   { key: 'birdhead', h: 1.15, r: 0.36, hp: 1, speed: 3.9, dmg: 4, xp: 1, flip: true },
   { key: 'drum', h: 1.7, r: 0.7, hp: 9, speed: 1.5, dmg: 12, xp: 4, flip: true },
-  { key: 'cerberus', h: 3.0, r: 1.4, hp: 110, speed: 2.1, dmg: 16, xp: 0, flip: true, boss: true },
+  { key: 'cerberus', h: 3.0, r: 1.4, hp: 110, speed: 2.1, dmg: 16, xp: 0, flip: true, boss: true, label: '看门的三头犬' },
+  { key: 'horn', h: 1.5, r: 0.45, hp: 3, speed: 2.3, dmg: 6, xp: 2, flip: true, ranged: true },
+  { key: 'shade', h: 1.5, r: 0.42, hp: 3, speed: 1.9, dmg: 6, xp: 1, flip: false, ghost: true },
+  { key: 'tybalt', model: true, h: 2.3, r: 0.8, hp: 200, speed: 2.5, dmg: 18, xp: 0, boss: true, label: '提伯尔特' },
 ];
-const HP_ADD = [1, 0, 3, 0];   // 每往后一幕，怪多几点血
+const HP_ADD = [1, 0, 3, 0, 1, 0, 0];   // 每往后一幕，怪多几点血
 const T = Object.fromEntries(TYPES.map((t, i) => [t.key, i]));
 function billboardGeo(w, h, centerY) {
   const g = new THREE.PlaneGeometry(w, h); g.translate(0, centerY ? 0 : h / 2, 0); g.rotateX(-PITCH); return g;
 }
 const enemyMeshes = TYPES.map((t) => {
+  if (t.model) return null;   // 提伯尔特用 3D 模型画
   const tex = texLoader.load(`assets/sprites/${t.key}.png`); tex.colorSpace = THREE.SRGBColorSpace;
   const m = new THREE.InstancedMesh(billboardGeo(1, 1), new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide }), MAX_E);
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -318,6 +436,7 @@ const noteTex = canvasTex(128, (g, s) => {
 });
 const noteMesh = flatInst(billboardGeo(1, 1, true), additive(noteTex), MAX_B + 8);
 const fireflyMesh = flatInst(billboardGeo(1, 1, true), additive(glowTex('127,227,216')), MAX_O);
+const ebMesh = flatInst(billboardGeo(1, 1, true), additive(glowTex('255,96,72')), 240);   // 号角怪的酸音：红色的光团
 const ringMat = additive(canvasTex(128, (g, s) => { g.strokeStyle = 'rgba(255,214,140,1)'; g.lineWidth = 7; g.shadowColor = '#ffb85c'; g.shadowBlur = 14; g.beginPath(); g.arc(s / 2, s / 2, s / 2 - 12, 0, Math.PI * 2); g.stroke(); }));
 const rings = [];
 function ring(x, z, r, life = 0.45) {
@@ -341,12 +460,15 @@ async function loadModel(name, height) {
   inner.add(obj); wrap.add(inner); wrap.userData.inner = inner;
   return wrap;
 }
-let hero = null, juliet = null, tybalt = null;
+let hero = null, juliet = null, tybalt = null, mercutio = null;
 
 // ---------- 数据 ----------
 const E = { n: 0, type: new Uint8Array(MAX_E), x: new Float32Array(MAX_E), z: new Float32Array(MAX_E), hp: new Float32Array(MAX_E),
   flash: new Float32Array(MAX_E), phase: new Float32Array(MAX_E), speed: new Float32Array(MAX_E), id: new Int32Array(MAX_E),
-  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E) };
+  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E) };
+// 怪射来的酸音（号角怪）
+const MAX_EB = 240;
+const EB = { n: 0, x: new Float32Array(MAX_EB), z: new Float32Array(MAX_EB), dx: new Float32Array(MAX_EB), dz: new Float32Array(MAX_EB), life: new Float32Array(MAX_EB) };
 const B = { n: 0, x: new Float32Array(MAX_B), z: new Float32Array(MAX_B), dx: new Float32Array(MAX_B), dz: new Float32Array(MAX_B),
   life: new Float32Array(MAX_B), dmg: new Float32Array(MAX_B), pierce: new Int16Array(MAX_B), bounce: new Int16Array(MAX_B),
   size: new Float32Array(MAX_B), last: new Int32Array(MAX_B) };
@@ -356,7 +478,7 @@ let nextId = 1;
 const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, moving: 0 };   // aimZ = 1：开打前面朝镜头
 let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevels = 0;
 let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
-let dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4;
+let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
 const maxHp = () => 100 + stats.maxHpBonus;
 const xpNeed = (L) => (L === 1 ? 2 : Math.round(3 * Math.pow(L, 1.35)));   // 第一次升级来得快（约第 7 秒）
@@ -375,13 +497,13 @@ function resetRun() {
 // ---------- 怪的生成和数量（第一幕：开局很简单，慢慢变多） ----------
 function act1Target(t) { return t < 20 ? Math.round(2 + t * 0.4) : Math.round(10 + (t - 20) * 1.25); }
 let spawnAcc = 0, birdWaves = 0;
-function spawnEnemy(type, ang, dist) {
+function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   if (E.n >= MAX_E) return;
   const a = ang ?? Math.random() * Math.PI * 2, d = dist ?? (actTime < 10 ? 15 : 17) + Math.random() * 3;
-  const ca = Math.cos(a), p = { x: player.x + Math.sin(a) * d, z: player.z + ca * d * (ca < 0 ? 1.1 : 0.75) };   // 生成在屏幕外
+  const ca = Math.cos(a), p = { x: cx + Math.sin(a) * d, z: cz + ca * d * (ca < 0 ? 1.1 : 0.75) };   // 生成在屏幕外
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
-  E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1;
+  E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
   E.hp[i] = t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0);
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
 }
@@ -389,6 +511,8 @@ const lowHp = () => player.hp < maxHp() * 0.35;
 function director(dt) {
   if (phase !== 'fight') return;
   if (act === 2) { director2(dt); return; }
+  if (act === 3) { director3(dt); return; }
+  if (act === 4) { director4(dt); return; }
   const target = act1Target(actTime) * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点
   spawnAcc += dt * (actTime < 20 ? 2 : 6);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
@@ -419,17 +543,56 @@ function director2(dt) {
   }
 }
 function bossIndex() { for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].boss) return i; return -1; }
+const count = (ty) => { let c = 0; for (let i = 0; i < E.n; i++) if (E.type[i] === ty) c++; return c; };
+// 第三幕：两家的人潮最多最厚，号角怪站在远处吹酸音；第 18 秒茂丘西奥倒下，第 22 秒提伯尔特出场
+function director3(dt) {
+  const boss = dogSpawned && !dogDown;
+  const target = (30 + actTime * 0.9) * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 8;
+  while (spawnAcc >= 1) {
+    spawnAcc -= 1; if (E.n >= target) continue;
+    const r = Math.random();
+    spawnEnemy(r < 0.22 && count(T.horn) < 8 ? T.horn : r < 0.42 ? T.drum : T.lute);
+  }
+  if (!boss && actTime > 6 + birdWaves * 8) {
+    birdWaves++;
+    const a = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 10 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
+  }
+  const fallAt = Math.min(18, ACT_LEN * 0.4), bossAt = Math.min(22, ACT_LEN * 0.5);
+  if (!mercFell && actTime >= fallAt) {
+    mercFell = true; slowmo = 1.2;
+    bark(BOSS_LINES.mercutioFall.who, BOSS_LINES.mercutioFall.text);
+    setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.mercutioFall2.who, BOSS_LINES.mercutioFall2.text); }, 2600);
+  }
+  if (!dogSpawned && actTime >= bossAt) {
+    dogSpawned = true; bossChargeCd = 3; tybaltHalfSaid = false;
+    spawnEnemy(T.tybalt, Math.PI, 14);
+    bark(BOSS_LINES.tybaltIn.who, BOSS_LINES.tybaltIn.text);
+    setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.tybaltIn2.who, BOSS_LINES.tybaltIn2.text); }, 2400);
+  }
+}
+// 第四幕：亡魂从四面八方涌向石台上的朱丽叶，也有一些家丁冲着罗密欧来
+function director4(dt) {
+  const target = (16 + actTime * 0.9) * (lowHp() ? 0.8 : 1);
+  spawnAcc += dt * 6;
+  while (spawnAcc >= 1) {
+    spawnAcc -= 1; if (E.n >= target) continue;
+    if (Math.random() < 0.75) spawnEnemy(T.shade, undefined, 17 + Math.random() * 4, 0, 0);
+    else spawnEnemy(Math.random() < 0.5 ? T.drum : T.lute);
+  }
+}
 
 function killEnemy(i) {
   const t = TYPES[E.type[i]];
-  if (t.boss) {   // 三头犬睡着了：散出一大圈萤火
+  if (t.boss) {   // Boss 被打动：散出一大圈萤火
     dogDown = true;
     for (let k = 0; k < 26 && O.n < MAX_O; k++) { const a = k / 26 * 6.28, d = 1 + Math.random() * 2, j = O.n++; O.x[j] = E.x[i] + Math.cos(a) * d; O.z[j] = E.z[i] + Math.sin(a) * d; O.v[j] = 1; O.t[j] = Math.random() * 6; }
-    if (phase === 'fight' || phase === 'levelup') bark(BOSS_LINES.dogDown.who, BOSS_LINES.dogDown.text);
+    if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : BOSS_LINES.dogDown; bark(L.who, L.text); }
     ring(E.x[i], E.z[i], 6, 0.8);
-  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp; O.t[k] = Math.random() * 6; }
+  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
-  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face]) a[i] = a[j];
+  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk]) a[i] = a[j];
   kills++;
 }
 function removeBullet(i) {
@@ -507,11 +670,12 @@ ui.innerHTML = `
 <div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span></span></div>
 <div id="boss" class="hide"><b>看门的三头犬</b><div class="bossbar"><i></i></div></div>
 <div id="acttitle" class="hide"><b></b></div>
+<div id="calm" class="hide"><b>朱丽叶的安稳</b><div class="bossbar"><i></i></div></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
 <div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：先做好了第一幕</p></div>
+<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：四幕都能玩了</p></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
 const $ = (s) => ui.querySelector(s);
 const show = (el, on = true) => el.classList.toggle('hide', !on);
@@ -601,10 +765,12 @@ function paintingCard(act, opts) {
 }
 
 // ---------- 流程 ----------
-let lineIdx = 0, saidLow = false, firstLevelSaid = false;
+let lineIdx = 0, saidLow = false, firstLevelSaid = false, saidCalmHalf = false, saidCalmLow = false;
 const ACTS = {
   1: { name: '第一幕 · 舞会', lines: ACT1_LINES },
   2: { name: '第二幕 · 阳台', lines: ACT2_LINES },
+  3: { name: '第三幕 · 决斗', lines: ACT3_LINES },
+  4: { name: '第四幕 · 墓室', lines: ACT4_LINES },
 };
 const ACT_NO = ['', '第一', '第二', '第三', '第四'];
 async function startRun(again) {
@@ -620,13 +786,15 @@ function beginAct(n, retry) {
   act = n;
   if (retry && snapshot) { ({ stats, levels, level, xp } = structuredClone(snapshot)); player.hp = maxHp(); }
   else snapshot = structuredClone({ stats, levels, level, xp });
-  E.n = B.n = O.n = 0; pendingLevels = 0;
+  E.n = B.n = O.n = 0; if (retry) pendingLevels = 0;   // 上一幕结束时攒下的升级，这一幕一开打就选
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.35);   // 每一幕开头回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
-  dogSpawned = dogDown = false; bossCharge = 0;
-  if (juliet) juliet.visible = false;
+  dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
+  if (juliet) { juliet.visible = false; layJuliet(false); }
   if (tybalt) tybalt.visible = false;
+  if (mercutio) { mercutio.visible = n === 3; mercutio.position.set(-1.6, 0, 1.2); mercutio.userData.inner.rotation.set(0, 0, 0); }
+  if (n === 4) { player.z = 3.2; if (juliet) { juliet.visible = true; layJuliet(true); } }
   setAct(n);
   $('#actinfo b').textContent = ACTS[n].name;
   show($('#bars')); show($('#actinfo'));
@@ -634,14 +802,29 @@ function beginAct(n, retry) {
   setTimeout(() => show(at, false), 2600);
   phase = 'fight';
 }
-async function endAct() {
+// 幕结束时还没飞到的萤火，经验直接算给罗密欧
+function flushOrbs() {
+  for (let i = 0; i < O.n; i++) xp += O.v[i];
+  O.n = 0;
+  while (xp >= xpNeed(level)) { xp -= xpNeed(level); level++; pendingLevels++; }
+}
+function layJuliet(lying) {
+  const j = juliet, inner = j.userData.inner;
+  j.userData.lying = lying;
+  if (lying) { j.position.set(0, 0.92, 0); j.rotation.set(0, Math.PI / 2, 0); inner.rotation.set(-Math.PI / 2, 0, 0); inner.position.set(0, 0.15, 0.95); inner.scale.set(1, 1, 0.55); }
+  else { j.rotation.set(0, 0, 0); inner.rotation.set(0, 0, 0); inner.position.set(0, 0, 0); inner.scale.set(1, 1, 1); }
+}
+async function endAct(good) {
   phase = 'actEnd';
   // 怪都安静下来，变成萤火
   for (let i = E.n - 1; i >= 0; i--) killEnemy(i);
-  B.n = 0; show($('#boss'), false);
-  if (juliet) { juliet.visible = true; juliet.position.set(player.x + 1.6, 0, player.z - 3.2); juliet.rotation.y = Math.atan2(-1.6, 3.2); }
+  B.n = 0; EB.n = 0; show($('#boss'), false); show($('#calm'), false);
+  if (mercutio) mercutio.visible = false;
+  if (act === 4) { await tombEnding(good); return; }
+  if (juliet) { juliet.visible = true; layJuliet(false); juliet.position.set(player.x + 1.6, 0, player.z - 3.2); juliet.rotation.y = Math.atan2(-1.6, 3.2); }
   if (hero) { player.aimX = 0.45; player.aimZ = -0.9; }
   await sleep(AUTO ? 50 : 1400);
+  flushOrbs();
   show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false);
   await playScene(SCENES[`act${act}End`]);
   phase = 'card';
@@ -652,6 +835,39 @@ async function endAct() {
   await playScene(SCENES[`act${act}To${act + 1}`]);
   if (ACTS[act + 1]) beginAct(act + 1);
   else paintingCardEnd();
+}
+// 第四幕的两种结局
+async function tombEnding(good) {
+  if (good) {   // 守住了：朱丽叶醒来，站到罗密欧面前
+    layJuliet(false); juliet.position.set(1.9, 0, 1.0); juliet.rotation.y = Math.atan2(player.x - 1.9, player.z - 1.0);
+    player.aimX = 0.8; player.aimZ = -0.6;
+    bierLight.intensity = 40;
+  } else {
+    stage.classList.add('freeze');
+  }
+  await sleep(AUTO ? 50 : 1400);
+  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false);
+  await playScene(SCENES[good ? 'goodEnd' : 'badEnd']);
+  phase = 'card'; stage.classList.add('freeze');
+  await sleep(AUTO ? 50 : 900);
+  if (good) {
+    await paintingCard('good', { lead: '你守住了朱丽叶，改写了莎士比亚的结局。', buttons: [['看结尾', 'go']] });
+    stage.classList.remove('freeze'); bierLight.intensity = 22;
+    theEnd(true);
+  } else {
+    const v = await paintingCard('bad', { lead: '莎士比亚写下的结局就是这样。再来一次，改写它？', buttons: [['从这一幕重来', 'act'], ['从头开始', 'all']] });
+    stage.classList.remove('freeze');
+    if (v === 'act') beginAct(4, true); else startRun(true);
+  }
+}
+function theEnd() {
+  phase = 'over';
+  const el = $('#title');
+  el.querySelector('h1').textContent = '全剧终';
+  el.querySelector('.sub').textContent = '这一次，罗密欧和朱丽叶都活了下来。';
+  el.querySelector('.go').textContent = '点一下，再玩一次';
+  el.querySelector('.tip').textContent = `这一局：${level} 级，打动了 ${kills} 只怪`;
+  show(el); titleReady = true;
 }
 function paintingCardEnd() {
   phase = 'over';
@@ -700,13 +916,21 @@ function step(dt) {
       if (L.tag === 'tybalt' && tybalt) { tybalt.visible = true; tybalt.position.set(player.x - 7.5, 0, player.z - 5); tybalt.userData.t = 0; }
     }
     if (!saidLow && player.hp < maxHp() * 0.4) { saidLow = true; bark(EVENT_LINES.lowHp.who, EVENT_LINES.lowHp.text); }
-    if (actTime >= ACT_LEN && (act !== 2 || dogDown)) { endAct(); return; }
+    if (act === 4) {
+      if (calm <= 0) { endAct(false); return; }
+      if (actTime >= ACT_LEN) { endAct(true); return; }
+      if (!saidCalmHalf && calm < 50) { saidCalmHalf = true; bark(BOSS_LINES.calmHalf.who, BOSS_LINES.calmHalf.text); }
+      if (!saidCalmLow && calm < 20) { saidCalmLow = true; bark(BOSS_LINES.calmLow.who, BOSS_LINES.calmLow.text); }
+    } else if (actTime >= ACT_LEN && (act === 1 || dogDown)) { endAct(); return; }
+    if (act === 3 && dogSpawned && !dogDown && !tybaltHalfSaid) {
+      const bi = bossIndex(); if (bi >= 0 && E.hp[bi] < TYPES[T.tybalt].hp / 2) { tybaltHalfSaid = true; bark(BOSS_LINES.tybaltHalf.who, BOSS_LINES.tybaltHalf.text); }
+    }
     if (dogSpawned && !dogDown) {   // 三头犬每隔几秒猛冲一下
       bossChargeCd -= dt; bossCharge -= dt;
       if (bossChargeCd <= 0) { bossChargeCd = 5; bossCharge = 0.8; }
     }
   }
-  if (tybalt && tybalt.visible) {
+  if (act === 1 && tybalt && tybalt.visible) {   // 第一幕：提伯尔特在场边露面
     tybalt.userData.t += dt;
     tybalt.rotation.y = Math.atan2(player.x - tybalt.position.x, player.z - tybalt.position.z);
     if (tybalt.userData.t > 5) { tybalt.position.x -= dt * 4; tybalt.rotation.y = -Math.PI / 2; }
@@ -720,19 +944,43 @@ function step(dt) {
   for (let i = 0; i < E.n; i++) {
     const t = TYPES[E.type[i]];
     const dx = player.x - E.x[i], dz = player.z - E.z[i], d = Math.hypot(dx, dz) || 1;
-    if (d > 34) { const a = Math.random() * 6.28; E.x[i] = player.x + Math.sin(a) * 20; E.z[i] = player.z + Math.cos(a) * 16; continue; }
+    if (d > 34 && !t.ghost) { const a = Math.random() * 6.28; E.x[i] = player.x + Math.sin(a) * 20; E.z[i] = player.z + Math.cos(a) * 16; continue; }
     const touch = player.r + t.r;
-    const st = Math.min(E.speed[i] * (t.boss && bossCharge > 0 ? 3.2 : 1) * dt, Math.max(0, d - touch));
-    E.x[i] += dx / d * st; E.z[i] += dz / d * st;
-    if (Math.abs(dx) > 0.2) E.face[i] = dx > 0 ? 1 : -1;
     if (E.flash[i] > 0) E.flash[i] -= dt;
     if (E.ocd[i] > 0) E.ocd[i] -= dt;
+    if (E.atk[i] > 0) E.atk[i] -= dt;
+    if (t.ghost && d > 2.2) {   // 亡魂飘向石台上的朱丽叶；罗密欧挡在身边时改去缠他
+      const gx = -E.x[i], gz = -E.z[i], gd = Math.hypot(gx, gz) || 1, reach = BIER_R + t.r + 0.05;
+      const st = Math.min(E.speed[i] * dt, Math.max(0, gd - reach));
+      E.x[i] += gx / gd * st; E.z[i] += gz / gd * st;
+      if (Math.abs(gx) > 0.2) E.face[i] = gx > 0 ? 1 : -1;
+      if (fighting && gd < reach + 0.15 && E.atk[i] <= 0) { E.atk[i] = 1.0; calm -= 2.4; E.flash[i] = 0.05; calmHit = 0.25; }
+      continue;
+    }
+    let sp = E.speed[i] * (t.boss && bossCharge > 0 ? 3.2 : 1);
+    if (t.ranged) {   // 号角怪：站在 7 到 9 米外，每隔两三秒吹一发酸音
+      if (d < 7) sp = -sp * 0.6; else if (d < 9) sp = 0;
+      if (fighting && d < 13 && E.atk[i] <= 0 && EB.n < MAX_EB) {
+        E.atk[i] = 2.4 + Math.random() * 1.2;
+        const k = EB.n++; EB.x[k] = E.x[i]; EB.z[k] = E.z[i]; EB.dx[k] = dx / d * 7; EB.dz[k] = dz / d * 7; EB.life[k] = 2.4;
+      }
+    }
+    const st = sp >= 0 ? Math.min(sp * dt, Math.max(0, d - touch)) : sp * dt;
+    E.x[i] += dx / d * st; E.z[i] += dz / d * st;
+    if (Math.abs(dx) > 0.2) E.face[i] = dx > 0 ? 1 : -1;
     if (fighting && d < touch + 0.12 && player.hurtCd <= 0 && !GOD) {
       player.hp -= t.dmg * early; player.hurtCd = 0.45;
       if (player.hp <= 0) { player.hp = 0; die(); return; }
     }
   }
   if (player.hurtCd > 0) player.hurtCd -= dt;
+  for (let k = EB.n - 1; k >= 0; k--) {
+    EB.x[k] += EB.dx[k] * dt; EB.z[k] += EB.dz[k] * dt; EB.life[k] -= dt;
+    const hx = EB.x[k] - player.x, hz = EB.z[k] - player.z;
+    const hitP = fighting && hx * hx + hz * hz < 0.55 * 0.55;
+    if (hitP && player.hurtCd <= 0 && !GOD) { player.hp -= 7; player.hurtCd = 0.45; if (player.hp <= 0) { player.hp = 0; die(); return; } }
+    if (hitP || EB.life[k] <= 0) { EB.n--; for (const a of [EB.x, EB.z, EB.dx, EB.dz, EB.life]) a[k] = a[EB.n]; }
+  }
   buildGrid();
   for (let i = 0; i < E.n; i++) {
     const ri = TYPES[E.type[i]].r;
@@ -762,6 +1010,7 @@ function step(dt) {
   else if (input.mouse.active) aim = mouseAim();
   if (!aim) { let t = nearestEnemy(player.x, player.z, 15);
     const bi = dogSpawned && !dogDown ? bossIndex() : -1;   // Boss 在 11 米内时，自动瞄准先打 Boss
+    if (act === 4) { let bd = 1e9; for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].ghost) { const q = E.x[i] * E.x[i] + E.z[i] * E.z[i]; const pd = Math.hypot(E.x[i] - player.x, E.z[i] - player.z); if (q < 36 && pd < 12 && q < bd) { bd = q; t = i; } } }   // 第四幕：先打离朱丽叶最近的亡魂
     if (bi >= 0 && Math.hypot(E.x[bi] - player.x, E.z[bi] - player.z) < 11) t = bi;
     if (t >= 0) { const dx = E.x[t] - player.x, dz = E.z[t] - player.z, d = Math.hypot(dx, dz) || 1; aim = { x: dx / d, z: dz / d }; } }
   if (aim) { player.aimX = aim.x; player.aimZ = aim.z; }
@@ -900,6 +1149,16 @@ function draw(dt) {
   const sm = shadowMesh.instanceMatrix.array;
   for (let i = 0; i < E.n; i++) {
     const ty = E.type[i], t = TYPES[ty], m = enemyMeshes[ty], k = counts[ty]++;
+    if (!m) {   // 提伯尔特：3D 模型
+      if (tybalt) {
+        tybalt.visible = true; tybalt.position.set(E.x[i], 0, E.z[i]);
+        tybalt.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]);
+        const inner = tybalt.userData.inner; inner.position.y = Math.abs(Math.sin(time * 7)) * 0.12; inner.rotation.z = Math.sin(time * 7) * 0.05;
+        inner.scale.setScalar(E.flash[i] > 0 ? 1.06 : 1);
+      }
+      writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
+      continue;
+    }
     const b = Math.abs(Math.sin(time * (ty === T.birdhead ? 13 : 8) + E.phase[i]));
     const s = t.h, flip = t.flip ? E.face[i] : 1;
     writeMatrix(m.instanceMatrix.array, k, E.x[i], b * 0.12, E.z[i], s * flip * (1 + (1 - b) * 0.06), s * (0.94 + b * 0.08), s * (0.94 + b * 0.08));
@@ -908,7 +1167,8 @@ function draw(dt) {
     const ss = t.r * 3;
     writeMatrix(sm, i, E.x[i], 0.012, E.z[i], ss, 1, ss * 0.7);
   }
-  enemyMeshes.forEach((m, ty) => { m.count = counts[ty]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
+  if (tybalt && act === 3 && !(dogSpawned && !dogDown) && tybalt.visible) tybalt.visible = false;
+  enemyMeshes.forEach((m, ty) => { if (!m) return; m.count = counts[ty]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
   shadowMesh.count = E.n; shadowMesh.instanceMatrix.needsUpdate = true;
 
   const nm = noteMesh.instanceMatrix.array;
@@ -920,6 +1180,10 @@ function draw(dt) {
     writeMatrix(nm, nn++, player.x + Math.sin(a) * 2.3, 1.0, player.z + Math.cos(a) * 2.3, 0.8, 0.8, 0.8);
   }
   noteMesh.count = nn; noteMesh.instanceMatrix.needsUpdate = true;
+
+  const em = ebMesh.instanceMatrix.array;
+  for (let k = 0; k < EB.n; k++) { const s = 0.75 + Math.sin(time * 20 + k) * 0.1; writeMatrix(em, k, EB.x[k], 0.9, EB.z[k], s, s, s); }
+  ebMesh.count = EB.n; ebMesh.instanceMatrix.needsUpdate = true;
 
   const fm = fireflyMesh.instanceMatrix.array;
   for (let i = 0; i < O.n; i++) { const s = 0.5 + Math.sin(O.t[i] * 5) * 0.1; writeMatrix(fm, i, O.x[i], 0.45 + Math.sin(O.t[i] * 3) * 0.12, O.z[i], s, s, s); }
@@ -939,7 +1203,16 @@ function draw(dt) {
     inner.scale.set(1 + (mv > 0.1 ? (1 - hop) * 0.04 : 0), breathe - (mv > 0.1 ? (1 - hop) * 0.05 : 0), 1);
     hero.visible = !(player.hurtCd > 0.25 && Math.floor(time * 20) % 2);
   }
-  if (juliet && juliet.visible) { juliet.userData.inner.position.y = 0.06 + Math.sin(time * 1.8) * 0.04; }
+  if (juliet && juliet.visible && !juliet.userData.lying) { juliet.userData.inner.position.y = 0.06 + Math.sin(time * 1.8) * 0.04; }
+  if (mercutio && mercutio.visible) {   // 第三幕：茂丘西奥跟在身边，倒下后留在原地
+    const inner = mercutio.userData.inner;
+    if (!mercFell) {
+      const tx = player.x - 1.7, tz = player.z + 1.1;
+      mercutio.position.x += (tx - mercutio.position.x) * Math.min(1, dt * 4); mercutio.position.z += (tz - mercutio.position.z) * Math.min(1, dt * 4);
+      mercutio.rotation.y = Math.atan2(player.aimX, player.aimZ);
+      inner.position.y = player.moving > 0.1 ? Math.abs(Math.sin(time * 11 + 1)) * 0.12 : 0;
+    } else { inner.rotation.z += (Math.PI / 2 - inner.rotation.z) * Math.min(1, dt * 3); inner.position.y = 0.2; }
+  }
   heroLight.position.set(player.x, 2.6, player.z + 1.2);
   heroGlow.position.x = player.x; heroGlow.position.z = player.z;
 
@@ -956,10 +1229,13 @@ function draw(dt) {
     $('#bars .hpbar i').style.width = (player.hp / maxHp() * 100) + '%';
     $('#bars .xpbar i').style.width = (xp / xpNeed(level) * 100) + '%';
     $('#bars .lv').textContent = `${level} 级`;
-    $('#actinfo span').textContent = act === 2 && actTime >= ACT_LEN && !dogDown ? '让三头犬睡着' : `${Math.max(0, Math.ceil(ACT_LEN - actTime))} 秒`;
+    const left = Math.max(0, Math.ceil(ACT_LEN - actTime));
+    $('#actinfo span').textContent = act === 4 ? `醒来还有 ${left} 秒` : actTime >= ACT_LEN && !dogDown ? (act === 2 ? '让三头犬睡着' : '打动提伯尔特') : `${left} 秒`;
     const bi = dogSpawned && !dogDown ? bossIndex() : -1;
     show($('#boss'), bi >= 0);
-    if (bi >= 0) $('#boss i').style.width = (E.hp[bi] / TYPES[T.cerberus].hp * 100) + '%';
+    if (bi >= 0) { const bt = TYPES[E.type[bi]]; $('#boss b').textContent = bt.label; $('#boss i').style.width = (E.hp[bi] / (bt.hp + HP_ADD[E.type[bi]] * (act - 1)) * 100) + '%'; }
+    show($('#calm'), act === 4);
+    if (act === 4) { $('#calm i').style.width = Math.max(0, calm) + '%'; calmHit -= dt; $('#calm').classList.toggle('hit', calmHit > 0); }
   }
 }
 
@@ -967,10 +1243,10 @@ function draw(dt) {
 let titleReady = false;
 $('#title').onclick = () => { if (!titleReady) return; titleReady = false; initAudio(); startRun(); };
 
-Promise.all([loadModel('fantasy', 1.9), loadModel('wedding-dress', 1.95), loadModel('minotaur', 2.3)]).then(([h, j, t]) => {
-  hero = h; juliet = j; tybalt = t;
-  scene.add(hero, juliet, tybalt);
-  juliet.visible = tybalt.visible = false;
+Promise.all([loadModel('fantasy', 1.9), loadModel('wedding-dress', 1.95), loadModel('minotaur', 2.3), loadModel('rabbit', 1.85)]).then(([h, j, t, m]) => {
+  hero = h; juliet = j; tybalt = t; mercutio = m;
+  scene.add(hero, juliet, tybalt, mercutio);
+  juliet.visible = tybalt.visible = mercutio.visible = false;
   titleReady = true;
   $('#title .go').textContent = '点一下开始';
   if (AUTO) $('#title').click();
@@ -980,7 +1256,7 @@ Promise.all([loadModel('fantasy', 1.9), loadModel('wedding-dress', 1.95), loadMo
 window.__game = {
   E, B, O, player,
   get phase() { return phase; }, get level() { return level; }, get kills() { return kills; },
-  get actTime() { return actTime; }, get time() { return time; }, get levels() { return levels; },
+  get actTime() { return actTime; }, get time() { return time; }, get levels() { return levels; }, get act() { return act; }, get calm() { return calm; },
 };
 
 // ---------- 主循环 ----------
