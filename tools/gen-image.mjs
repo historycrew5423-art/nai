@@ -8,6 +8,7 @@
 import { readFile, writeFile, appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 
 const MODEL_NAME = 'GPT-image-2.5';
@@ -35,7 +36,9 @@ if (!price || price.amount !== ALLOWED_YUAN || price.unit !== 'request') {
 if (refs.length > (m.max_image_refs ?? 0)) throw new Error(`参考图 ${refs.length} 张，超过上限 ${m.max_image_refs}`);
 
 // 2. 提交（同一个请求编号，超时重试不会重复扣费）
-const reqId = `nai-${name}-${Date.now()}`;
+// 编号由文件名、比例、提示词和参考图算出来：进程被打断后原样重跑，用的还是同一个编号，不会再扣一次。
+// 想对同样的提示词重新出一张，设环境变量 GEN_TRY=2、3……
+const reqId = `nai-${name}-` + createHash('sha1').update([ratio, prompt, ...refs, process.env.GEN_TRY || ''].join('\n')).digest('hex').slice(0, 16);
 const body = JSON.stringify({ model: MODEL_ID, prompt, ratio, imageSize: SIZE, image_urls: refs });
 let res, data;
 for (let attempt = 0; attempt < 4; attempt++) {
