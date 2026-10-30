@@ -38,7 +38,7 @@ export class Input {
     this.mouse.active = false;
     let onButton = false;
     for (const t of e.changedTouches) {
-      if (t.target.closest && t.target.closest('button')) { onButton = true; continue; }
+      if (t.target.closest && t.target.closest('button, [data-ui]:not(.hide)')) { onButton = true; continue; } // 按钮和对话框、选卡这些界面：照常点击，不当成摇杆
       const side = t.clientX < innerWidth / 2 ? 'left' : 'right';
       if ([...this.touches.values()].some((s) => s.side === side)) continue;
       const el = this.sticks[side];
