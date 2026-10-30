@@ -58,13 +58,22 @@ public static class VeronaGraybox
                 Cylinder("Side_Column",decor,new(Mathf.Sign(x)*42,5,z),.6f,10,structure);
         }
         // Front (+Z) decoration, including candle placeholders, never exceeds 1m.
-        Box("Near_Low_Rail_0_8m",decor,new(0,.4f,31),new(86,.8f,.3f),detail);
+        Box("Near_Rail_Top_0_8m",decor,new(0,.74f,31),new(86,.12f,.22f),detail);
+        Box("Near_Rail_Bottom",decor,new(0,.12f,31),new(86,.12f,.22f),structure);
+        for(int i=0;i<44;i++)
+            Box("Near_Rail_Post",decor,new(-43+i*2,.4f,31),new(.12f,.8f,.22f),detail);
         for(int i=0;i<23;i++)
             Cylinder("Near_Candle_Placeholder",decor,new(-42+i*(84f/22),.9f,31),.08f,.2f,prop);
         for(int i=0;i<8;i++) {
             string name=i<4 ? "RoundTable" : i<6 ? "HarpStatue_Blockout" : "Candelabrum_Blockout";
             var p=new Vector3(positions[i].x,heights[i]/2,positions[i].y);
-            Cylinder(name+"_"+(i+1).ToString("00"),obstacles,p,radii[i],heights[i],prop);
+            if(i<4) {
+                var table=Group(name+"_"+(i+1).ToString("00"),obstacles);
+                table.localPosition=new(positions[i].x,0,positions[i].y);
+                Cylinder("Tabletop",table,new(0,.74f,0),1.2f,.12f,prop);
+                Cylinder("Pedestal",table,new(0,.37f,0),.18f,.62f,structure);
+                Cylinder("Foot",table,new(0,.06f,0),.48f,.12f,prop);
+            } else Cylinder(name+"_"+(i+1).ToString("00"),obstacles,p,radii[i],heights[i],prop);
             var col=Cylinder("COL_CYL_"+(i+1).ToString("00"),collisions,p,radii[i],heights[i],detail);
             col.GetComponent<MeshRenderer>().enabled=false;
             var mc=col.AddComponent<MeshCollider>();
@@ -81,7 +90,7 @@ public static class VeronaGraybox
         Camera cam=CameraAt("GameCam",new(0,18,13),Vector3.zero,45);
         cam.tag="MainCamera";
         cam.gameObject.AddComponent<AudioListener>();
-        CameraAt("OverviewCam_ReviewOnly",new(64,82,92),Vector3.zero,52).enabled=false;
+        CameraAt("OverviewCam_ReviewOnly",new(0,63,57),new(0,0,-2),62).enabled=false;
         EditorSceneManager.SaveScene(scene,"Assets/Verona/Scenes/Act1_Ballroom_Graybox.unity");
         AssetDatabase.SaveAssets();
         ValidateAndCapture();
@@ -138,6 +147,12 @@ public static class VeronaGraybox
         if(cols.Length!=8) throw new InvalidOperationException("Expected 8 obstacle cylinders");
         float gap=float.MaxValue;
         for(int i=0;i<8;i++) {
+            var actual=cols.Single(c=>c.name=="COL_CYL_"+(i+1).ToString("00"));
+            var expected=new Vector3(positions[i].x,heights[i]/2,positions[i].y);
+            if(Vector3.Distance(actual.transform.position,expected)>.001f ||
+               Quaternion.Angle(actual.transform.rotation,Quaternion.identity)>.001f ||
+               Vector3.Distance(actual.transform.lossyScale,new Vector3(radii[i]*2,heights[i]/2,radii[i]*2))>.001f || !actual.convex)
+                throw new InvalidOperationException("Collider transform mismatch: "+actual.name);
             if(Mathf.Abs(positions[i].x)+radii[i]>26 || Mathf.Abs(positions[i].y)+radii[i]>26)
                 throw new InvalidOperationException("Boundary clearance failure");
             if(Mathf.Abs(positions[i].x)-radii[i]<8 && Mathf.Abs(positions[i].y)-radii[i]<8)
@@ -145,6 +160,15 @@ public static class VeronaGraybox
             for(int j=i+1;j<8;j++) gap=Mathf.Min(gap,Vector2.Distance(positions[i],positions[j])-radii[i]-radii[j]);
         }
         if(gap<6) throw new InvalidOperationException("Obstacle spacing below 6m");
+        Physics.SyncTransforms();
+        var ground=GameObject.Find("PlayableFloor_60x60_TopY0").GetComponent<BoxCollider>().bounds;
+        if(Mathf.Abs(ground.max.y)>.001f || Mathf.Abs(ground.size.x-60)>.001f || Mathf.Abs(ground.size.z-60)>.001f)
+            throw new InvalidOperationException("Floor bounds mismatch");
+        if(arena.transform.Find("Decoration_OutsidePlayable").GetComponentsInChildren<Collider>().Length!=0)
+            throw new InvalidOperationException("Decoration must not have colliders");
+        foreach(var mesh in arena.transform.Find("Decoration_OutsidePlayable").GetComponentsInChildren<Renderer>())
+            if(mesh.bounds.min.z>=30 && mesh.bounds.max.y>1.001f)
+                throw new InvalidOperationException("Near decoration exceeds 1m: "+mesh.name);
         var cam=GameObject.Find("GameCam").GetComponent<Camera>();
         cam.transform.position=new(0,18,13);cam.transform.LookAt(Vector3.zero);
         Capture(cam,"act1-graybox-gamecam.png");
