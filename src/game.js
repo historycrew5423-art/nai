@@ -1,4 +1,4 @@
-// 正式游戏 v0.2：第一幕「舞会」。
+// 正式游戏 v0.2：第一幕「舞会」、第二幕「阳台」（花园）。
 // 玩法：双摇杆，罗密欧唱情歌射出音符；怪被打动后变成萤火，捡了升级，三选一技能。
 // 地图没有边界：地面和障碍物按 40 米一块无缝重复，玩家走到哪铺到哪（docs/场景规格.md 开头）。
 // 怪物的 3D 模型还没有，先用参考图做的立牌（assets/sprites/）。
@@ -8,13 +8,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Input } from './input.js';
 import { byId, drawCards, baseStats } from './skills.js';
-import { PEOPLE, SCENES, ACT1_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
+import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
 const AUTO = Q.has('auto'), GOD = Q.has('god'), DEBUG = Q.has('debug');
 const TILE = 40;                 // 地块边长（米）
-const ACT1_LEN = +Q.get('len') || 45;   // 第一幕打斗时长（秒）；?len=12 给测试用，缩短这一幕
+const ACT_LEN = +Q.get('len') || 45;    // 每一幕打斗时长（秒）；?len=12 给测试用，缩短每一幕
+const START_ACT = +Q.get('act') || 1;   // ?act=2 直接从第二幕开始（测试用）
 const MAX_E = 900, MAX_B = 1600, MAX_O = 1600;
 const CAM = new THREE.Vector3(0, 11, 9.5);          // 镜头在主角上方 11 米、往镜头那侧 9.5 米（往下约 49 度）
 const PITCH = Math.atan2(CAM.y, CAM.z);             // 立牌朝镜头倾斜的角度
@@ -42,7 +43,7 @@ addEventListener('resize', layout);
 layout();
 
 // ---------- 灯：冷蓝的月光和环境光，主角身上一盏暖光 ----------
-scene.add(new THREE.HemisphereLight(0x8a90c8, 0x2a1e2a, 1.25));
+const hemi = new THREE.HemisphereLight(0x8a90c8, 0x2a1e2a, 1.25); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x9fb4ff, 0.9); moon.position.set(-6, 12, -4); scene.add(moon);
 const heroLight = new THREE.PointLight(0xffb85c, 18, 9, 1.4); scene.add(heroLight);
 
@@ -98,8 +99,38 @@ function ballroomFloor() {
   }, true);
 }
 
+// 花园地面：深蓝绿色的草地，中间一圈浅色碎石小路（半径 8 米）。四方连续。
+function gardenFloor() {
+  return canvasTex(1024, (g, S) => {
+    let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    g.fillStyle = '#1e3833'; g.fillRect(0, 0, S, S);
+    for (let k = 0; k < 46; k++) {
+      const x = rnd() * S, y = rnd() * S, r = 40 + rnd() * 110, dark = rnd() < 0.5;
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        gr.addColorStop(0, dark ? 'rgba(10,26,24,.35)' : 'rgba(52,86,70,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+      }
+    }
+    for (let k = 0; k < 12000; k++) {
+      const x = rnd() * S, y = rnd() * S, v = rnd();
+      g.fillStyle = v < 0.5 ? 'rgba(62,104,82,.45)' : 'rgba(14,34,30,.45)';
+      g.fillRect(x, y, 2, 5); if (y > S - 5) g.fillRect(x, y - S, 2, 5);
+    }
+    const c = S / 2, R = S * 8 / 40, w = S * 1.5 / 40;
+    g.strokeStyle = '#5d5c55'; g.lineWidth = w; g.beginPath(); g.arc(c, c, R, 0, Math.PI * 2); g.stroke();
+    for (let k = 0; k < 2600; k++) {
+      const a = rnd() * Math.PI * 2, r = R + (rnd() - 0.5) * w * 0.95, v = 70 + rnd() * 50 | 0;
+      g.fillStyle = `rgb(${v},${v - 2},${v - 8})`; g.fillRect(c + Math.cos(a) * r, c + Math.sin(a) * r, 2.5, 2.5);
+    }
+    g.strokeStyle = 'rgba(10,20,18,.5)'; g.lineWidth = 3;
+    for (const rr of [R - w / 2, R + w / 2]) { g.beginPath(); g.arc(c, c, rr, 0, Math.PI * 2); g.stroke(); }
+  }, true);
+}
+
 // ---------- 无限地面 ----------
-const floorTex = ballroomFloor(); floorTex.repeat.set(3, 3);
+const floors = { 1: ballroomFloor() };
+const floorTex = floors[1]; floorTex.repeat.set(3, 3);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 3, TILE * 3), new THREE.MeshLambertMaterial({ map: floorTex }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
@@ -109,7 +140,21 @@ const ACT1_OBS = [
   { kind: 'harp', x: 11, z: -11, r: 1.0 }, { kind: 'harp', x: -11, z: 11, r: 1.0 },
   { kind: 'candle', x: -15, z: 0, r: 0.6 }, { kind: 'candle', x: 15, z: 0, r: 0.6 },
 ];
+const ACT2_OBS = [
+  { kind: 'fountain', x: -11, z: -11, r: 2.0 }, { kind: 'statue', x: 11, z: -11, r: 1.0 }, { kind: 'hedge', x: 11, z: 11, r: 2.0 },
+  { kind: 'tree', x: -11, z: 11, r: 0.8 }, { kind: 'tree', x: -15, z: 0, r: 0.8 }, { kind: 'tree', x: 15, z: 0, r: 0.8 },
+];
+const OBS = { 1: ACT1_OBS, 2: ACT2_OBS };
 const MAT = {
+  hedge: new THREE.MeshLambertMaterial({ color: 0x2b5236 }),
+  leaf: new THREE.MeshLambertMaterial({ color: 0x2f5c34 }),
+  orange: new THREE.MeshLambertMaterial({ color: 0xe38a2c, emissive: 0x3a1a04 }),
+  pot: new THREE.MeshLambertMaterial({ color: 0x8e4a2c }),
+  marble: new THREE.MeshLambertMaterial({ color: 0xd9d3c8, emissive: 0x1a1a22 }),
+  water: new THREE.MeshLambertMaterial({ color: 0x3d6f8e, emissive: 0x0b2236 }),
+  wood: new THREE.MeshLambertMaterial({ color: 0x4a3222 }),
+  rose: new THREE.MeshLambertMaterial({ color: 0xb0263a, emissive: 0x200408 }),
+  coolPool: additive(glowTex('127,227,216'), 0.18),
   cloth: new THREE.MeshLambertMaterial({ color: 0x7a2230 }),
   gold: new THREE.MeshLambertMaterial({ color: 0xd9a441, emissive: 0x3a2508 }),
   stone: new THREE.MeshLambertMaterial({ color: 0x5a5262 }),
@@ -119,8 +164,9 @@ const MAT = {
   glow: additive(glowTex('255,184,92'), 0.9),
   pool: additive(glowTex('255,170,80'), 0.24),
 };
-function buildTile(obs) {
-  const parts = { cloth: [], gold: [], stone: [], iron: [], wax: [], flame: [], glow: [], pool: [] };
+function buildTile(act) {
+  const obs = OBS[act];
+  const parts = Object.fromEntries(Object.keys(MAT).map((k) => [k, []]));
   const put = (k, geo, x, y, z, rx = 0, ry = 0, rz = 0, s = 1) => {
     geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.scale(s, s, s); geo.translate(x, y, z);
     parts[k].push(geo.index ? geo.toNonIndexed() : geo);
@@ -129,7 +175,9 @@ function buildTile(obs) {
     put('flame', new THREE.SphereGeometry(0.07, 6, 4).scale(1, 1.7, 1), x, y, z);
     const gl = new THREE.PlaneGeometry(0.9, 0.9); gl.rotateX(-PITCH); put('glow', gl, x, y, z);
   };
-  const pool = (x, z, r) => put('pool', new THREE.PlaneGeometry(r * 2, r * 2), x, 0.02, z, -Math.PI / 2);
+  const pool = (x, z, r, k = 'pool') => put(k, new THREE.PlaneGeometry(r * 2, r * 2), x, 0.02, z, -Math.PI / 2);
+  const lantern = (x, z) => { put('iron', new THREE.CylinderGeometry(0.04, 0.06, 0.45, 6), x, 0.22, z); put('gold', new THREE.BoxGeometry(0.16, 0.18, 0.16), x, 0.52, z); flame(x, 0.52, z); pool(x, z, 2.4); };
+  const bush = (x, z) => { put('hedge', new THREE.SphereGeometry(0.3, 7, 5).scale(1, 0.7, 1), x, 0.18, z); for (let k = 0; k < 3; k++) put('rose', new THREE.SphereGeometry(0.07, 5, 4), x + (Math.random() - 0.5) * 0.4, 0.33, z + (Math.random() - 0.5) * 0.4); };
   const rose = (x, z) => put('cloth', new THREE.CircleGeometry(0.09, 5), x, 0.015, z, -Math.PI / 2, Math.random() * 6);
   const mask = (x, z) => put('gold', new THREE.SphereGeometry(0.16, 8, 4).scale(1.4, 0.25, 0.9), x, 0.03, z, 0, Math.random() * 6);
   for (const o of obs) {
@@ -153,11 +201,37 @@ function buildTile(obs) {
       put('gold', new THREE.BoxGeometry(1.0, 0.06, 0.06), x, 2.05, z);
       for (const dx of [-0.45, 0, 0.45]) { put('wax', new THREE.CylinderGeometry(0.05, 0.05, 0.2, 6), x + dx, 2.18, z); flame(x + dx, 2.36, z); }
       pool(x, z, 3.6);
+    } else if (o.kind === 'fountain') {
+      put('stone', new THREE.CylinderGeometry(2.0, 2.1, 0.6, 20), x, 0.3, z);
+      put('water', new THREE.CylinderGeometry(1.8, 1.8, 0.04, 20), x, 0.58, z);
+      put('stone', new THREE.CylinderGeometry(0.22, 0.3, 1.2, 8), x, 1.0, z);
+      put('stone', new THREE.CylinderGeometry(0.75, 0.4, 0.18, 14), x, 1.62, z);
+      put('water', new THREE.CylinderGeometry(0.66, 0.66, 0.03, 14), x, 1.72, z);
+      pool(x, z, 3.4, 'coolPool');
+    } else if (o.kind === 'statue') {
+      put('stone', new THREE.BoxGeometry(1.3, 0.8, 1.3), x, 0.4, z);
+      put('marble', new THREE.CylinderGeometry(0.22, 0.42, 1.25, 10), x, 1.42, z);
+      put('marble', new THREE.SphereGeometry(0.2, 10, 8), x, 2.22, z);
+      put('marble', new THREE.CylinderGeometry(0.06, 0.06, 0.7, 6), x + 0.32, 1.7, z, 0, 0, 0.9);
+      pool(x, z, 2.4, 'coolPool');
+    } else if (o.kind === 'hedge') {
+      put('hedge', new THREE.SphereGeometry(2.0, 16, 10).scale(1, 0.72, 1), x, 0.95, z);
+      for (let k = 0; k < 9; k++) { const a = k / 9 * 6.28; put('rose', new THREE.SphereGeometry(0.1, 5, 4), x + Math.cos(a) * 1.75, 1.0 + Math.sin(k * 2.3) * 0.4, z + Math.sin(a) * 1.75); }
+    } else if (o.kind === 'tree') {
+      put('pot', new THREE.CylinderGeometry(0.55, 0.42, 0.6, 12), x, 0.3, z);
+      put('wood', new THREE.CylinderGeometry(0.08, 0.11, 0.9, 6), x, 1.0, z);
+      put('leaf', new THREE.SphereGeometry(0.85, 12, 8), x, 1.75, z);
+      for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28; put('orange', new THREE.SphereGeometry(0.1, 6, 4), x + Math.cos(a) * 0.72, 1.6 + Math.sin(k * 1.7) * 0.35, z + Math.sin(a) * 0.72); }
     }
-    for (let k = 0; k < 7; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.6; rose(x + Math.cos(a) * d, z + Math.sin(a) * d); }
-    for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = o.r + 0.8 + Math.random() * 1.2; mask(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+    if (act === 1) {
+      for (let k = 0; k < 7; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.6; rose(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+      for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = o.r + 0.8 + Math.random() * 1.2; mask(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+    } else {
+      for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28, d = o.r + 0.7 + Math.random() * 1.2; bush(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+    }
   }
-  pool(0, 0, 8.5); pool(20, 20, 4.5); pool(-20, 20, 4.5); pool(20, -20, 4.5); pool(-20, -20, 4.5); // 吊灯照在地上的暖色光斑
+  if (act === 1) { pool(0, 0, 8.5); pool(20, 20, 4.5); pool(-20, 20, 4.5); pool(20, -20, 4.5); pool(-20, -20, 4.5); } // 吊灯照在地上的暖色光斑
+  else { for (const [x, z] of [[-6.6, -6.6], [6.6, 6.6], [6.6, -6.6], [-6.6, 6.6]]) lantern(x, z); }   // 花园：小路边四盏矮灯笼
   const g = new THREE.Group();
   for (const [k, list] of Object.entries(parts)) if (list.length) {
     const m = new THREE.Mesh(mergeGeometries(list), MAT[k]);
@@ -166,10 +240,30 @@ function buildTile(obs) {
   }
   return g;
 }
-const tileProto = buildTile(ACT1_OBS);
-const tiles = [];
-for (let i = 0; i < 9; i++) { const t = tileProto.clone(); scene.add(t); tiles.push(t); }
+let tiles = [], curObs = ACT1_OBS, tileAct = 0;
 let tileIX = 1e9, tileIZ = 1e9;
+// 换一幕：换地面、地块、灯光
+const LOOKS = {
+  1: { bg: 0x14121c, hemi: [0x8a90c8, 0x2a1e2a, 1.25], moon: [0x9fb4ff, 0.9] },
+  2: { bg: 0x0e1420, hemi: [0x7a92c8, 0x16241f, 1.15], moon: [0xa8c0ff, 1.5] },
+};
+function setAct(n) {
+  if (tileAct !== n) {
+    for (const t of tiles) scene.remove(t);
+    if (tiles[0]) tiles[0].traverse((o) => o.geometry && o.geometry.dispose());
+    const proto = buildTile(n);
+    tiles = []; for (let i = 0; i < 9; i++) { const t = proto.clone(); scene.add(t); tiles.push(t); }
+    if (!floors[n]) { floors[n] = gardenFloor(); floors[n].repeat.set(3, 3); }
+    floor.material.map = floors[n]; floor.material.needsUpdate = true;
+    tileAct = n;
+  }
+  curObs = OBS[n];
+  const L = LOOKS[n];
+  scene.background.setHex(L.bg); scene.fog.color.setHex(L.bg);
+  hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
+  moon.color.setHex(L.moon[0]); moon.intensity = L.moon[1];
+  tileIX = 1e9; updateTiles(player.x, player.z);
+}
 function updateTiles(px, pz) {
   const ix = Math.round(px / TILE), iz = Math.round(pz / TILE);
   if (ix === tileIX && iz === tileIZ) return;
@@ -181,7 +275,7 @@ function updateTiles(px, pz) {
 // 把圆推出障碍物。障碍物离地块边至少 3 米，所以只查自己所在的那一块。
 function pushOut(p, r) {
   const ox = Math.round(p.x / TILE) * TILE, oz = Math.round(p.z / TILE) * TILE;
-  for (const o of ACT1_OBS) {
+  for (const o of curObs) {
     const dx = p.x - (ox + o.x), dz = p.z - (oz + o.z), rr = o.r + r, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr) { const d = Math.sqrt(d2) || 1e-3; p.x = ox + o.x + dx / d * rr; p.z = oz + o.z + dz / d * rr; }
   }
@@ -193,7 +287,9 @@ const TYPES = [
   { key: 'lute', h: 1.55, r: 0.5, hp: 2, speed: 2.1, dmg: 7, xp: 1, flip: false },
   { key: 'birdhead', h: 1.15, r: 0.36, hp: 1, speed: 3.9, dmg: 4, xp: 1, flip: true },
   { key: 'drum', h: 1.7, r: 0.7, hp: 9, speed: 1.5, dmg: 12, xp: 4, flip: true },
+  { key: 'cerberus', h: 3.0, r: 1.4, hp: 110, speed: 2.1, dmg: 16, xp: 0, flip: true, boss: true },
 ];
+const HP_ADD = [1, 0, 3, 0];   // 每往后一幕，怪多几点血
 const T = Object.fromEntries(TYPES.map((t, i) => [t.key, i]));
 function billboardGeo(w, h, centerY) {
   const g = new THREE.PlaneGeometry(w, h); g.translate(0, centerY ? 0 : h / 2, 0); g.rotateX(-PITCH); return g;
@@ -259,7 +355,8 @@ let nextId = 1;
 
 const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, moving: 0 };   // aimZ = 1：开打前面朝镜头
 let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevels = 0;
-let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0;
+let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
+let dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
 const maxHp = () => 100 + stats.maxHpBonus;
 const xpNeed = (L) => (L === 1 ? 2 : Math.round(3 * Math.pow(L, 1.35)));   // 第一次升级来得快（约第 7 秒）
@@ -270,9 +367,9 @@ function resetRun() {
   player.x = player.z = 0; player.hp = 100; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
   stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0;
   time = actTime = 0; fireCd = drumCd = slowmo = 0; lineIdx = 0; saidLow = false; firstLevelSaid = false; birdWaves = 0;
+  act = 1; snapshot = null;
   if (tybalt) tybalt.visible = false;
   if (juliet) juliet.visible = false;
-  updateTiles(0, 0);
 }
 
 // ---------- 怪的生成和数量（第一幕：开局很简单，慢慢变多） ----------
@@ -285,26 +382,52 @@ function spawnEnemy(type, ang, dist) {
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
   E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1;
-  E.hp[i] = t.hp + (type === T.lute && actTime > 22 ? 1 : 0);
+  E.hp[i] = t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0);
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
 }
+const lowHp = () => player.hp < maxHp() * 0.35;
 function director(dt) {
   if (phase !== 'fight') return;
-  const target = act1Target(actTime) * (player.hp < maxHp() * 0.35 ? 0.75 : 1);   // 血少时悄悄少出一点
+  if (act === 2) { director2(dt); return; }
+  const target = act1Target(actTime) * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点
   spawnAcc += dt * (actTime < 20 ? 2 : 6);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
   // 鸟嘴面具客人：第 25 秒起，每 6 秒从一个方向冲来一小群
-  if (actTime > 25 + birdWaves * 6 && actTime < ACT1_LEN - 3) {
+  if (actTime > 25 + birdWaves * 6 && actTime < ACT_LEN - 3) {
     birdWaves++;
     const a = Math.random() * Math.PI * 2;
     for (let k = 0; k < 6 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
   }
   if (actTime > 38 && E.n < target + 3 && Math.random() < dt * 0.6) spawnEnemy(T.drum);
 }
+// 第二幕：家丁和鼓怪更多更厚，鸟嘴面具一群群来，第 22 秒左右三头犬从远处冲来（打它时小怪变少）
+const DOG_AT = Math.min(22, ACT_LEN * 0.5);
+function director2(dt) {
+  const boss = dogSpawned && !dogDown;
+  const target = (22 + actTime * 0.8) * (boss ? 0.45 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 7;
+  while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(Math.random() < 0.28 ? T.drum : T.lute); }
+  if (!boss && actTime > 5 + birdWaves * 7) {
+    birdWaves++;
+    const a = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 8 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
+  }
+  if (!dogSpawned && actTime >= DOG_AT) {
+    dogSpawned = true; bossChargeCd = 4;
+    spawnEnemy(T.cerberus, Math.PI, 15);
+    bark(BOSS_LINES.dogIn.who, BOSS_LINES.dogIn.text);
+  }
+}
+function bossIndex() { for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].boss) return i; return -1; }
 
 function killEnemy(i) {
   const t = TYPES[E.type[i]];
-  if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp; O.t[k] = Math.random() * 6; }
+  if (t.boss) {   // 三头犬睡着了：散出一大圈萤火
+    dogDown = true;
+    for (let k = 0; k < 26 && O.n < MAX_O; k++) { const a = k / 26 * 6.28, d = 1 + Math.random() * 2, j = O.n++; O.x[j] = E.x[i] + Math.cos(a) * d; O.z[j] = E.z[i] + Math.sin(a) * d; O.v[j] = 1; O.t[j] = Math.random() * 6; }
+    if (phase === 'fight' || phase === 'levelup') bark(BOSS_LINES.dogDown.who, BOSS_LINES.dogDown.text);
+    ring(E.x[i], E.z[i], 6, 0.8);
+  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp; O.t[k] = Math.random() * 6; }
   const j = --E.n;
   for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face]) a[i] = a[j];
   kills++;
@@ -315,6 +438,7 @@ function removeBullet(i) {
 }
 function hurtEnemy(i, dmg, kx = 0, kz = 0) {
   E.hp[i] -= dmg; E.flash[i] = 0.09;
+  if (TYPES[E.type[i]].boss) { kx *= 0.08; kz *= 0.08; }   // 三头犬推不太动
   if (kx || kz) { E.x[i] += kx; E.z[i] += kz; }
   if (E.hp[i] <= 0) { killEnemy(i); return true; }
   return false;
@@ -381,6 +505,8 @@ ui.innerHTML = `
 <div id="vignette"></div>
 <div id="bars" class="hide"><div class="hpbar"><i></i></div><div class="xpbar"><i></i></div><span class="lv">1 级</span></div>
 <div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span></span></div>
+<div id="boss" class="hide"><b>看门的三头犬</b><div class="bossbar"><i></i></div></div>
+<div id="acttitle" class="hide"><b></b></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
 <div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
@@ -476,49 +602,75 @@ function paintingCard(act, opts) {
 
 // ---------- 流程 ----------
 let lineIdx = 0, saidLow = false, firstLevelSaid = false;
+const ACTS = {
+  1: { name: '第一幕 · 舞会', lines: ACT1_LINES },
+  2: { name: '第二幕 · 阳台', lines: ACT2_LINES },
+};
+const ACT_NO = ['', '第一', '第二', '第三', '第四'];
 async function startRun(again) {
   resetRun();
   show($('#title'), false);
   phase = 'story';
-  if (!again) await playScene(SCENES.prologue);
+  if (START_ACT > 1 && !again) {   // 测试用：直接从后面的幕开始，先送几级
+    for (const id of ['chord', 'presto', 'sustain', 'chord']) { takeSkill(id); level++; }
+  } else if (!again) await playScene(SCENES.prologue);
+  beginAct(again ? 1 : START_ACT);
+}
+function beginAct(n, retry) {
+  act = n;
+  if (retry && snapshot) { ({ stats, levels, level, xp } = structuredClone(snapshot)); player.hp = maxHp(); }
+  else snapshot = structuredClone({ stats, levels, level, xp });
+  E.n = B.n = O.n = 0; pendingLevels = 0;
+  player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
+  if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.35);   // 每一幕开头回一点血
+  actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
+  dogSpawned = dogDown = false; bossCharge = 0;
+  if (juliet) juliet.visible = false;
+  if (tybalt) tybalt.visible = false;
+  setAct(n);
+  $('#actinfo b').textContent = ACTS[n].name;
   show($('#bars')); show($('#actinfo'));
+  const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
+  setTimeout(() => show(at, false), 2600);
   phase = 'fight';
 }
-async function endAct1() {
+async function endAct() {
   phase = 'actEnd';
   // 怪都安静下来，变成萤火
   for (let i = E.n - 1; i >= 0; i--) killEnemy(i);
-  B.n = 0;
+  B.n = 0; show($('#boss'), false);
   if (juliet) { juliet.visible = true; juliet.position.set(player.x + 1.6, 0, player.z - 3.2); juliet.rotation.y = Math.atan2(-1.6, 3.2); }
   if (hero) { player.aimX = 0.45; player.aimZ = -0.9; }
   await sleep(AUTO ? 50 : 1400);
   show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false);
-  await playScene(SCENES.act1End);
+  await playScene(SCENES[`act${act}End`]);
   phase = 'card';
   stage.classList.add('freeze');
   await sleep(AUTO ? 50 : 900);
-  await paintingCard(1, { buttons: [['继续', 'go']] });
+  await paintingCard(act, { buttons: [['继续', 'go']] });
   stage.classList.remove('freeze');
-  await playScene(SCENES.act1To2);
-  await paintingCardEnd();
+  await playScene(SCENES[`act${act}To${act + 1}`]);
+  if (ACTS[act + 1]) beginAct(act + 1);
+  else paintingCardEnd();
 }
 function paintingCardEnd() {
   phase = 'over';
   const el = $('#title');
-  el.querySelector('h1').textContent = '第一幕 完';
-  el.querySelector('.sub').textContent = '第二幕「阳台」正在制作，先玩到这里。';
+  el.querySelector('h1').textContent = `${ACT_NO[act]}幕 完`;
+  el.querySelector('.sub').textContent = ['', '', '第三幕「决斗」正在制作，先玩到这里。'][act] || '后面的几幕正在制作，先玩到这里。';
   el.querySelector('.go').textContent = '点一下，再玩一次';
   el.querySelector('.tip').textContent = `这一局：${level} 级，打动了 ${kills} 只怪`;
   show(el); titleReady = true;
 }
 async function die() {
   phase = 'dead';
-  show($('#bark'), false);
+  show($('#bark'), false); show($('#boss'), false);
   await sleep(AUTO ? 50 : 1200);
   show($('#bars'), false); show($('#actinfo'), false);
-  await playScene([['narrator', DEATH[1]]]);
-  await paintingCard(1, { lead: '你在第一幕倒下了。先看看这一幕的名画：', buttons: [['再来一次', 'again']] });
-  startRun(true);
+  await playScene([['narrator', DEATH[act]]]);
+  const btns = act > 1 ? [['从这一幕重来', 'act'], ['从头开始', 'all']] : [['再来一次', 'all']];
+  const v = await paintingCard(act, { lead: `你在${ACT_NO[act]}幕倒下了。先看看这一幕的名画：`, buttons: btns });
+  if (v === 'act') beginAct(act, true); else startRun(true);
 }
 
 // ---------- 每一帧 ----------
@@ -541,13 +693,18 @@ function step(dt) {
 
   if (fighting) {
     // 剧情喊话
-    while (lineIdx < ACT1_LINES.length && actTime >= ACT1_LINES[lineIdx].t) {
-      const L = ACT1_LINES[lineIdx++];
+    const LINES = ACTS[act].lines;
+    while (lineIdx < LINES.length && actTime >= LINES[lineIdx].t) {
+      const L = LINES[lineIdx++];
       bark(L.who, L.text);
       if (L.tag === 'tybalt' && tybalt) { tybalt.visible = true; tybalt.position.set(player.x - 7.5, 0, player.z - 5); tybalt.userData.t = 0; }
     }
     if (!saidLow && player.hp < maxHp() * 0.4) { saidLow = true; bark(EVENT_LINES.lowHp.who, EVENT_LINES.lowHp.text); }
-    if (actTime >= ACT1_LEN) { endAct1(); return; }
+    if (actTime >= ACT_LEN && (act !== 2 || dogDown)) { endAct(); return; }
+    if (dogSpawned && !dogDown) {   // 三头犬每隔几秒猛冲一下
+      bossChargeCd -= dt; bossCharge -= dt;
+      if (bossChargeCd <= 0) { bossChargeCd = 5; bossCharge = 0.8; }
+    }
   }
   if (tybalt && tybalt.visible) {
     tybalt.userData.t += dt;
@@ -559,13 +716,13 @@ function step(dt) {
   director(dt);
 
   // 怪：朝主角走，互相推开，绕开障碍物
-  const early = actTime < 20 ? 0.35 : 1;
+  const early = act === 1 && actTime < 20 ? 0.35 : 1;   // 第一幕前 20 秒怪几乎打不疼人
   for (let i = 0; i < E.n; i++) {
     const t = TYPES[E.type[i]];
     const dx = player.x - E.x[i], dz = player.z - E.z[i], d = Math.hypot(dx, dz) || 1;
     if (d > 34) { const a = Math.random() * 6.28; E.x[i] = player.x + Math.sin(a) * 20; E.z[i] = player.z + Math.cos(a) * 16; continue; }
     const touch = player.r + t.r;
-    const st = Math.min(E.speed[i] * dt, Math.max(0, d - touch));
+    const st = Math.min(E.speed[i] * (t.boss && bossCharge > 0 ? 3.2 : 1) * dt, Math.max(0, d - touch));
     E.x[i] += dx / d * st; E.z[i] += dz / d * st;
     if (Math.abs(dx) > 0.2) E.face[i] = dx > 0 ? 1 : -1;
     if (E.flash[i] > 0) E.flash[i] -= dt;
@@ -603,7 +760,10 @@ function step(dt) {
   let aim = null;
   if (input.aim.active) { const d = Math.hypot(input.aim.x, input.aim.y); aim = { x: input.aim.x / d, z: input.aim.y / d }; }
   else if (input.mouse.active) aim = mouseAim();
-  if (!aim) { const t = nearestEnemy(player.x, player.z, 15); if (t >= 0) { const dx = E.x[t] - player.x, dz = E.z[t] - player.z, d = Math.hypot(dx, dz) || 1; aim = { x: dx / d, z: dz / d }; } }
+  if (!aim) { let t = nearestEnemy(player.x, player.z, 15);
+    const bi = dogSpawned && !dogDown ? bossIndex() : -1;   // Boss 在 11 米内时，自动瞄准先打 Boss
+    if (bi >= 0 && Math.hypot(E.x[bi] - player.x, E.z[bi] - player.z) < 11) t = bi;
+    if (t >= 0) { const dx = E.x[t] - player.x, dz = E.z[t] - player.z, d = Math.hypot(dx, dz) || 1; aim = { x: dx / d, z: dz / d }; } }
   if (aim) { player.aimX = aim.x; player.aimZ = aim.z; }
 
   // 开火
@@ -796,7 +956,10 @@ function draw(dt) {
     $('#bars .hpbar i').style.width = (player.hp / maxHp() * 100) + '%';
     $('#bars .xpbar i').style.width = (xp / xpNeed(level) * 100) + '%';
     $('#bars .lv').textContent = `${level} 级`;
-    $('#actinfo span').textContent = `${Math.max(0, Math.ceil(ACT1_LEN - actTime))} 秒`;
+    $('#actinfo span').textContent = act === 2 && actTime >= ACT_LEN && !dogDown ? '让三头犬睡着' : `${Math.max(0, Math.ceil(ACT_LEN - actTime))} 秒`;
+    const bi = dogSpawned && !dogDown ? bossIndex() : -1;
+    show($('#boss'), bi >= 0);
+    if (bi >= 0) $('#boss i').style.width = (E.hp[bi] / TYPES[T.cerberus].hp * 100) + '%';
   }
 }
 
@@ -821,7 +984,7 @@ window.__game = {
 };
 
 // ---------- 主循环 ----------
-updateTiles(0, 0);
+setAct(1);
 let last = performance.now(), frames = 0, fpsT = last;
 function loop(now) {
   requestAnimationFrame(loop);
