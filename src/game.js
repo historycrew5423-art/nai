@@ -1278,7 +1278,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(1 / 30, (now - last) / 1000); last = now;
   if (document.body.classList.contains('portrait')) return;
-  if (slowmo > 0) dt *= 0.25;
+  if (slowmo > 0) { if (phase !== 'levelup') slowmo -= dt; dt *= 0.25; }   // 慢动作（升级前、茂丘西奥倒下时）按真实时间倒数
   if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead' && phase !== 'paused') step(dt);
   else if (phase === 'levelup' && slowmo > 0) step(dt);
   else stepFx(dt);
