@@ -3,6 +3,68 @@
 > 用户（02:25）："你也出一个合适的3d场景图，我试一下用unity，你也查一下做游戏的一般怎么用unity"
 > 用户（02:35）："可以用gptimage2.5做几个好的美术风格的游戏场景图，并想好提示词让我给codex的unity试试"
 
+## 〇、一段话版：直接贴给 Codex，让它在 Unity 里搭场景（10-31 03:15）
+
+> 用户（03:10）："给我可以直接让gpt用unity搭场景的提示词，要包括仓库链接那种，只搭场景不加人先"
+> 用法：在 Mac 上新开一个 Codex 会话，整段贴进去。它会自己把仓库克隆下来，读这份文件第四节的「提示词 2 到 5」拿到每一幕的细节。已经开着的 Codex 会话也可以贴，开头写明了"这次只做一件事"。
+
+```text
+你是我在 VibeHacks #06 黑客松（主题「Vibe Coding for 3D 游戏世界」）的 Unity 搭档。我不会写代码，所有操作由你来做；需要我在界面上点的地方，一步一步告诉我。
+
+【这次只做一件事】
+在 Unity 里搭四个游戏场地，导出成 GLB，给我们的手机网页游戏用，以后也拿来拍过场视频。只搭场景，不放任何人物、怪物、动物。
+
+【仓库】
+- GitHub：https://github.com/historycrew5423-art/nai （公开仓库，开发分支是 dev）
+- 克隆并新建 unity 分支：
+  git clone https://github.com/historycrew5423-art/nai.git
+  cd nai
+  git checkout -b unity origin/dev
+  （如果远端已经有 unity 分支，就改成 git checkout unity && git pull）
+- 只在 unity/ 文件夹里新建和修改文件，不要改 unity/ 以外的任何文件（网页游戏的代码由另一个 AI 负责）。
+- 推送前先确认 git push 能用。不能用就带我做 gh auth login（在网页上登录 GitHub）。不要让我把密码或密钥贴给你，也不要把任何密钥写进文件。
+
+【先读这些（都在仓库里）】
+1. docs/Unity场景和提示词.md：第四节的「提示词 1」是共同规矩，「提示词 2 到 5」是四幕各自的地面、四周、障碍物坐标和灯光。照那里的数字做。
+2. 四张概念图，先打开看：assets/ref/scene-1-ballroom.png（舞会大厅）、scene-2-garden.png（花园阳台）、scene-3-piazza.png（维罗纳广场）、scene-4-tomb.png（墓室）。图里站着的小角色和墓室石台上的人，这次都不要做。
+3. docs/美术风格.md：颜色表、光、「游戏画面要看得清」那一节。
+4. docs/场景规格.md：尺寸、碰撞体、面数。
+
+【最重要的规矩（和仓库文档有冲突时，以这里为准）】
+- 不放任何人物：不要导入 assets/models/ 里的角色；第四幕中间的石台空着。看比例可以放一个 1.7 米高的灰色胶囊体，命名 SCALE_REF，导出前删掉。
+- 单位米，Y 朝上，原点是场地中心，地面高度 0。可玩区域 60×60 米（X、Z 都从 -30 到 30），地面完全平整；中间 16×16 米空着。
+- 障碍物 6 到 12 个：每个占地 1 到 4 米，高不超过 2.5 米，彼此至少隔 6 米，离边界至少 4 米。每个配一个碰撞体：方块命名 COL_BOX_01、COL_BOX_02……（只能绕 Y 轴转），竖直圆柱命名 COL_CYL_01……
+- 可玩区域外面做一圈约 15 米宽的装饰，看得见、走不进。+Z 是镜头那一侧（概念图的下边），那一侧的装饰不高于 1 米。
+- 游戏镜头：放一个相机 GameCam，位置 (0, 18, 13)，看向 (0, 0, 0)，竖直视角 45 度，画面 16:9。
+- 地面中等偏暗、对比低、花纹少，上面要能看清几百只小怪和发光的子弹。精致的东西放在边上。
+- 只用 URP/Lit 材质，只用 Base Map（颜色贴图），不用 Shader Graph 和自定义着色器（导出 GLB 时带不过去）。
+- 每个 GLB 不超过 80000 个三角面、6 MB；贴图边长不超过 1024（重复铺的地面可以 2048）。
+- 免费素材只用 CC0 的（Poly Haven、ambientCG、Kenney、Quaternius），每个素材的名字、网址、许可证记进 unity/日志.md。要花钱或花点数的（包括 Unity AI 的 Generators、Asset Store 付费素材），先问我。
+
+【环境】
+1. 先检查这台 Mac：芯片、剩余磁盘空间、git、Codex 版本、有没有 Unity Hub。把结果告诉我。
+2. 用 Unity Hub 装 Unity 6.3 LTS（版本号 6000.3 开头）。新建项目选 Universal 3D（URP）模板，放在 nai/unity/VeronaArenas。下载很慢或失败就告诉我，可以改用团结引擎。
+3. 装 Unity 官方的 Codex 插件：
+   codex plugin marketplace add Unity-Technologies/unity-agent-plugin
+   codex plugin add unity@unity-agent-plugin
+   用 codex plugin list 确认已安装、已启用。插件需要 Unity CLI 时按它的提示装。实在连不上编辑器也没关系：你直接写场景文件和编辑器脚本，让我在编辑器里点，再把截图给你看。
+4. 在 Package Manager 里按名字添加 com.unity.cloud.gltfast（导出 GLB 用）。在 unity/VeronaArenas/ 放 Unity 的 .gitignore（排除 Library、Temp、Logs、obj、Build、UserSettings）。
+
+【做法（每一步做完都停下来，给我截图，我说继续再往下）】
+先只做第一幕舞会大厅。我看过满意了，再做第二、三、四幕。
+1. 灰盒：用方块、圆柱、平面（或 ProBuilder）按尺寸搭地面、四周的大轮廓、障碍物和碰撞体。截图两张：GameCam 一张；把 GameCam 临时移到 (22, 18, 35) 看向 (22, 0, 22) 一张（场地角落）。
+2. 美术：照概念图换材质、加道具、打灯光、加后期（Volume 里的 Bloom、调色、暗角），让 GameCam 的截图尽量像概念图。再放一个低机位的电影相机 FilmCam（高约 1.6 米，看向场地中间），截一张。
+3. 导出：可玩区域、装饰、碰撞体都放在一个根物体 Arena_Act1（第二到四幕是 Arena_Act2、Arena_Act3、Arena_Act4）下面。选中它，用 GameObject > Export glTF > glTF-Binary 导出到 unity/output/scene/act1-ballroom.glb（之后是 act2-garden.glb、act3-piazza.glb、act4-tomb.glb）。灯光导不进 GLB，把主要灯光的类型、颜色、位置、方向、强度写进 unity/output/scene/灯光.md。截图存进 unity/output/screens/。
+4. 告诉我三角面数、文件大小、用了哪些素材，然后提交并推送到 unity 分支。
+
+【工作方式】
+- 在 unity/日志.md 里按时间记每一步：做了什么、我的反馈、怎么改的。
+- 每一幕最多花 60 分钟，到时间没做完就停下，把现状给我看。四幕最晚在上海时间 10 月 31 日 10:00 之前推送，网页版要接进去。
+- 单个文件不超过 50 MB。改大东西之前先提交一次，出错能退回。
+
+现在先做【环境】第 1 步，告诉我结果和接下来要我做什么。
+```
+
 ## 一、四张场景图（GPT-image-2.5，每张 0.3 积分）
 
 ![四幕的场景图](images/scenes-v1-sheet.jpg)
@@ -136,7 +198,7 @@
 ```text
 做第四幕：卡普莱特家的墓室，深夜。照 assets/ref/scene-4-tomb.png。
 
-- 这一幕例外：场地正中间 (0, 0) 有一张低石台（2.6 × 1.4 米，高 0.9 米，长边沿 X 轴，COL_BOX），朱丽叶躺在上面沉睡（用仓库 assets/models/wedding-dress.glb，躺平放在石台上，双手交叠；导出 GLB 时不要带上她，网页版自己放）。石台周围一圈蜡烛（半径约 2.5 米，装饰，不要碰撞体）。中间其余的地方照样留空。
+- 这一幕例外：场地正中间 (0, 0) 有一张低石台（2.6 × 1.4 米，高 0.9 米，长边沿 X 轴，COL_BOX）。概念图里朱丽叶躺在上面，但现在只搭场景，石台上先空着，不放任何人物（10-31 03:10 用户定的）。石台周围一圈蜡烛（半径约 2.5 米，装饰，不要碰撞体）。中间其余的地方照样留空。
 - 地面：灰紫色的大块石板，素一点，有一点磨损。
 - 四周：雕花石棺、哥特式尖拱和石柱、铁栅栏门、铁烛台上一排排滴着蜡的蜡烛、枯萎的花和褪色的红丝带。
 - 近处（+Z）：低矮的铁栅栏，高不超过 1 米。
