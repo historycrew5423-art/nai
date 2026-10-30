@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>画面样张</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../../vendor/three/three.module.js", "three/addons/": "../../vendor/three/addons/" } }</script>
+</head><body>
+<script type="module">
+// 画面样张：用游戏引擎和真实模型，按 v0.2 的镜头（约 45 度、距离约 12 米）和美术风格的配色渲染一帧。
+// ?hero=fantasy|minotaur|rabbit 选主角。
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true });
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14121c);
+scene.fog = new THREE.Fog(0x14121c, 12, 30);
+const cam = new THREE.PerspectiveCamera(45, W / H, 0.3, 80);
+cam.position.set(0, 7.6, 7.6); cam.lookAt(0, 0.7, 0);
+
+// 灯：冷蓝的环境光 + 斜上方的冷月光 + 主角身上的暖光
+scene.add(new THREE.HemisphereLight(0x8090c0, 0x201a28, 1.1));
+const moon = new THREE.DirectionalLight(0x9fb4ff, 1.2); moon.position.set(-6, 12, -4); scene.add(moon);
+const warm = new THREE.PointLight(0xffb85c, 16, 7, 1.5); warm.position.set(0, 2.6, 1.4); scene.add(warm);
+
+// 地面：暗灰紫的石板，花纹很淡
+function stone() {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#3a3640'; g.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const v = 52 + Math.random() * 10 | 0; g.fillStyle = `rgb(${v},${v - 4},${v + 6})`;
+    g.fillRect(x * 128 + 3, y * 128 + 3, 122, 122);
+  }
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ map: stone() }));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+// 石柱和烛台
+const pillarMat = new THREE.MeshLambertMaterial({ color: 0x4a4452 });
+const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb85c });
+const ironMat = new THREE.MeshLambertMaterial({ color: 0x2a2630 });
+for (const [x, z] of [[-6, -6], [6, -6], [-7, 3], [7, 2], [0, -11], [-11, -2], [11, -3]]) {
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.75, 2.2, 12), pillarMat); p.position.set(x, 1.1, z); scene.add(p);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.3, 1.9), pillarMat); cap.position.set(x, 0.15, z); scene.add(cap);
+}
+for (let i = 0; i < 14; i++) {
+  const x = -13 + i * 2, z = -9.5;
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 1.1, 6), ironMat); stand.position.set(x, 0.55, z); scene.add(stand);
+  const fl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), flameMat); fl.position.set(x, 1.2, z); fl.scale.y = 1.6; scene.add(fl);
+}
+const cl = new THREE.PointLight(0xffa040, 25, 10, 1.8); cl.position.set(0, 1.6, -9); scene.add(cl);
+
+// 亡魂（占位）：一滴倒过来的水滴加两只眼睛，用顶点颜色区分身体和眼睛
+function shadeGeo() {
+  const parts = [];
+  const top = new THREE.SphereGeometry(0.36, 14, 10); top.translate(0, 0.78, 0); parts.push([top, [1, 1, 1]]);
+  const tail = new THREE.ConeGeometry(0.36, 0.7, 14, 1, true); tail.rotateX(Math.PI); tail.translate(0, 0.43, 0); parts.push([tail, [1, 1, 1]]);
+  for (const ex of [-0.13, 0.13]) { const e = new THREE.SphereGeometry(0.07, 8, 6); e.translate(ex, 0.82, 0.31); parts.push([e, [0.04, 0.05, 0.08]]); }
+  return mergeGeometries(parts.map(([g, c]) => {
+    g = g.toNonIndexed(); g.deleteAttribute('uv');
+    const n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set(c, i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
+  }));
+}
+const N = 70;
+const shades = new THREE.InstancedMesh(shadeGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x7fe3d8, emissive: 0x164f55, transparent: true, opacity: 0.88 }), N);
+const o = new THREE.Object3D();
+for (let i = 0; i < N; i++) {
+  const a = Math.random() * Math.PI * 2, d = 2.3 + Math.pow(Math.random(), 0.7) * 9;
+  o.position.set(Math.cos(a) * d, Math.random() * 0.2, Math.sin(a) * d * 0.8 - 0.5);
+  o.rotation.y = Math.atan2(-o.position.x, -o.position.z); o.scale.setScalar(0.75 + Math.random() * 0.2); o.updateMatrix();
+  shades.setMatrixAt(i, o.matrix);
+}
+scene.add(shades);
+
+// 音符和经验萤火
+const notes = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: 0xffd98a }), 24);
+for (let i = 0; i < 24; i++) {
+  const lane = (i % 3 - 1) * 0.18, step = Math.floor(i / 3);
+  const ang = -2.3 + lane, dist = 1.1 + step * 0.85;
+  o.position.set(Math.cos(ang) * dist, 1.0, Math.sin(ang) * dist); o.rotation.set(0, i, 0); o.scale.setScalar(1); o.updateMatrix(); notes.setMatrixAt(i, o.matrix);
+}
+scene.add(notes);
+const gc = document.createElement('canvas'); gc.width = gc.height = 64; const gg = gc.getContext('2d');
+const gr = gg.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,200,110,.9)'); gr.addColorStop(1, 'rgba(255,160,60,0)'); gg.fillStyle = gr; gg.fillRect(0, 0, 64, 64);
+const glowMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.AdditiveBlending, depthWrite: false });
+const tmp = new THREE.Matrix4(), pos = new THREE.Vector3();
+for (let i = 0; i < 24; i++) { notes.getMatrixAt(i, tmp); pos.setFromMatrixPosition(tmp); const sp = new THREE.Sprite(glowMat); sp.position.copy(pos); sp.scale.setScalar(0.9); scene.add(sp); }
+const flies = new THREE.InstancedMesh(new THREE.SphereGeometry(0.08, 6, 4), new THREE.MeshBasicMaterial({ color: 0x9ff7e8 }), 30);
+for (let i = 0; i < 30; i++) { o.position.set((Math.random() - 0.5) * 9, 0.3 + Math.random() * 0.4, (Math.random() - 0.5) * 6); o.updateMatrix(); flies.setMatrixAt(i, o.matrix); }
+scene.add(flies);
+
+// 主角：真实模型，按 1.5 米高放好，脚下一圈影子
+const hero = new URLSearchParams(location.search).get('hero') || 'fantasy';
+const g = await new GLTFLoader().loadAsync(`../../assets/models/${hero}.glb`);
+const m = g.scene; const box = new THREE.Box3().setFromObject(m); const h = box.max.y - box.min.y;
+m.scale.setScalar(1.9 / h); m.rotation.y = -2.3 + Math.PI / 2 + 0.3; scene.add(m);
+const sc = document.createElement('canvas'); sc.width = sc.height = 64; const sg = sc.getContext('2d');
+const grad = sg.createRadialGradient(32, 32, 0, 32, 32, 32); grad.addColorStop(0, 'rgba(0,0,0,.55)'); grad.addColorStop(1, 'rgba(0,0,0,0)'); sg.fillStyle = grad; sg.fillRect(0, 0, 64, 64);
+const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.position.y = 0.01; scene.add(blob);
+
+r.render(scene, cam);
+window.__done = true;
+</script></body></html>

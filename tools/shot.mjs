@@ -8,7 +8,7 @@ import path from 'node:path';
 const tools = process.env.TOOLS || '/projects/sandbox/.tools';
 const { chromium } = createRequire(path.join(tools, 'pw') + '/')('playwright');
 
-const [root, out, waitMs = '4000', w = '960', h = '540'] = process.argv.slice(2);
+const [root, out, waitMs = '4000', w = '960', h = '540', pagePath = 'index.html'] = process.argv.slice(2);
 if (!root || !out) {
   console.error('用法：bash tools/shot.sh <网页文件夹> <输出图片> [等待毫秒] [宽] [高]');
   process.exit(1);
@@ -36,7 +36,7 @@ await page.route('http://local.test/**', async (route) => {
     await route.fulfill({ status: 404, body: 'not found' });
   }
 });
-await page.goto('http://local.test/index.html');
+await page.goto('http://local.test/' + pagePath);
 await page.waitForTimeout(+waitMs);
 await page.screenshot({ path: out });
 const fps = await page.evaluate(() => window.__fps ?? null);
