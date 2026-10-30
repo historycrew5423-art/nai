@@ -1,5 +1,6 @@
 # 交接文件：给接手的 AI（每一轮都会更新）
 
+> **03:35 第 31 轮：** 把四幕的场景提示词（[docs/Unity场景和提示词.md](docs/Unity场景和提示词.md) 第四节提示词 2 到 5）直接发给用户，先做第一幕。等 Codex 推送 `unity/output/scene/act1-ballroom.glb` 到 `unity` 分支后，Kiro 接进网页版。
 > **03:30 第 30 轮：** 用户已在 Mac 上装好 Unity。问 Codex 能不能看到参考图、Unity 能不能做出小王子的效果。答复和给 Codex 的看图补充写在 [docs/Unity场景和提示词.md](docs/Unity场景和提示词.md)（第〇节的"补充"和第二节）。
 > **最后更新：2026-10-31 03:20（上海时间），第 3 段对话第 29 轮。对白已确认（三种都要、油画头像、搞笑加正经），四张头像在 `assets/portraits/`。给 Codex 在 Unity 里只搭场景的一段话提示词在 [docs/Unity场景和提示词.md](docs/Unity场景和提示词.md) 第〇节。下一步写 `src/game.js` 第一幕（带对白）。**
 > 第 28 轮（03:05）：对白方案和台词稿在 [docs/对白.md](docs/对白.md)。
