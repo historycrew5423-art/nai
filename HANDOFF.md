@@ -2,6 +2,7 @@
 
 > **03:45 第 35 轮：** 用户要 Codex 从灰盒一口气做到美术，并说"场景不要有边界"。AI 把场景改成无限地图：每幕一块 40×40 米、四方连续的地块（30000 面、3 MB 以内，每块 6 个障碍物），网页版铺满四周。改了 [docs/Unity场景和提示词.md](docs/Unity场景和提示词.md)（第〇节规矩、"补充 2"给已开着的会话、第四节四幕地块）和 [docs/场景规格.md](docs/场景规格.md) 开头。代价：概念图四周的墙、阳台、房子、钟楼没了。写 game.js 时：地面和地块按玩家位置循环铺 3×3，怪在屏幕外一圈刷出，第四幕石台单独放在原点。
 > **03:35 第 34 轮：** Codex 交出了第一幕的灰盒，用户以为不对。AI 解释这是提示词里的第 1 步，给了一段让 Codex 继续做美术的话。仍在等用户回"写"。
+> **04:20 第 36 轮（用户 03:45 去睡觉，睡到 06:30，说"你自己找点事干，不要生到 2000 像素的图就行"）：** AI 写完了 v0.2 的第一幕并推上线：`index.html` 改为加载 `src/boot.js`，正式游戏在 `src/game.js`，压力测试在 `?test=1`。用户醒来后先请他用 iPhone 试第一幕、报帧数。详见第四节开头。
 > **03:27 第 33 轮：** 用户确认是横屏游戏。答：是，16:9，竖着拿会提示横过来（已在线上测试版里），第一幕照用。仍在等用户回"写"。
 > **03:25 第 32 轮：** 用户问成品和小王子差多少。AI 答：画面和角色动作明显比不上，手机能玩、玩法、故事和名画是我们的长处；最大的差距是能玩的第一幕还没写。提议 AI 从现在起只写代码（目标 06:00 前第一幕能在 iPhone 上玩），等用户回"写"。
 > **03:17 第 31 轮：** 把四幕的场景提示词（[docs/Unity场景和提示词.md](docs/Unity场景和提示词.md) 第四节提示词 2 到 5）直接发给用户，先做第一幕。等 Codex 推送 `unity/output/scene/act1-ballroom.glb` 到 `unity` 分支后，Kiro 接进网页版。
@@ -66,7 +67,16 @@
 
 ## 四、现在的状态
 - **线上网址：** https://historycrew5423-art.github.io/nai/ （GitHub Pages，从 `dev` 分支根目录发布，推送后一两分钟更新）。
-- **线上是 v0.1 压力测试版：** 方块代替怪，黄球代替主角，一开局就 150 只怪（只为测卡不卡，不是正式难度）。右上角能调怪的数量、子弹数、画质、无敌。沙盒测试：150 只 45 帧、800 只 30 帧（CPU 模拟），线上加载 0.3 到 0.6 秒，没有报错。用户还没报 iPhone 上的帧数。
+- **10-31 04:20 线上是 v0.2 第一幕（能完整玩一遍）：** 网址不变；`?test=1` 进 v0.1 压力测试版；测试参数 `?god=1` 不会死、`?debug=1` 显示帧数、`?len=秒数` 缩短第一幕、`?auto=1` 自动跳过对话和选卡（给机器人用）。
+  - 流程：开始画面 → 开场对话（旁白、茂丘西奥、罗密欧，能跳过）→ 第一幕打 45 秒 → 怪都变成萤火，朱丽叶走过来，幕末对话 → 画面变旧、第一幅油画卡（原作出处和两条小知识）→ 幕间对话里选回答（三张技能卡印着情话）→ "第一幕 完，第二幕正在制作"，点一下再玩。中途倒下：旁白一句、名画卡、再来一次（不再放开场对话）。
+  - 地图没有边界：舞会地面是画出来的四方连续贴图（深梅子色大理石、中间一圈金色花纹），障碍物按 40 米一块重复（2 张小圆桌、2 个竖琴雕像、2 个落地烛台，坐标和给 Codex 的第一幕地块一样），地面和地块跟着玩家铺 3×3。Codex 的 `act1-ballroom.glb` 到了以后换进来。
+  - 主角是 `fantasy.glb`，代码做动作（走路一蹦一摇、站着呼吸、朝瞄准方向转身），脚下一圈暖光；幕末朱丽叶（`wedding-dress.glb`）出现；第 34 秒提伯尔特（`minotaur.glb`）在场边露面 5 秒再走开。
+  - 怪：还没有 3D 模型，用 `assets/ref/` 的参考图去掉白底做成立牌（`assets/sprites/`，脚本 `tools/make-sprites.mjs`），朝镜头倾斜，走路一蹦一蹦，被打中闪白，脚下有影子。第一幕：鲁特琴（普通，2 血）、第 25 秒起鸟嘴面具客人一群一群冲来（1 血、快）、第 38 秒起少量鼓怪（9 血）。
+  - 音符是发光的金色 ♪，萤火是冷青色，7 米内自动飞向罗密欧。10 个技能都接上了（`src/skills.js`），升级时慢放、三选一、选完震开一圈。弹琴音效：每发一个音符弹一声，连起来是一段旋律（点开始时才打开声音，iPhone 的规矩）。
+  - 对白：台词在 `src/dialogue.js`（从 docs/对白.md 搬过来的第一幕部分）。打斗中喊话在屏幕上方，教操作、提醒鸟嘴面具要来、提伯尔特露面、第一次升级、血少。
+  - 机器人测试（沙盒 CPU 模拟，帧数只看趋势，约 35 帧）：升级在第 8、17、30、37 秒（设计是 8、18、30，之后每 12 到 15 秒）；乱走的机器人 45 秒掉了 12% 的血，第一幕偏轻松，是教学幕；没有报错。截图拼图 `docs/images/game-v02-act1.jpg`。
+  - 还没做：第二到四幕、提伯尔特 Boss、墓室守护、结局；怪的弱点（盾、远程）；暂停键和静音键；自动降画质；Codex 地块的接入。
+- **（04:20 以前）线上是 v0.1 压力测试版（现在在 `?test=1`）：** 方块代替怪，黄球代替主角，一开局就 150 只怪（只为测卡不卡，不是正式难度）。右上角能调怪的数量、子弹数、画质、无敌。沙盒测试：150 只 45 帧、800 只 30 帧（CPU 模拟），线上加载 0.3 到 0.6 秒，没有报错。用户还没报 iPhone 上的帧数。
 - **v0.2 进行中（10-31 01:20 用户说"接着"后开工）：**
   - 已完成：四个模型处理好放在 `assets/models/`（共 2.3 MB，脚本 `tools/process-models.mjs`，依赖装法写在脚本开头）；GLTFLoader 放进 `vendor/three/addons/`；v0.1 代码改名为 `src/stress.js`（`index.html` 现在仍加载它）；技能定义写在 `src/skills.js`（10 个技能，还没接进游戏）。
   - 画面样张：`tools/mock/index.html`（用游戏引擎、真实模型、新镜头和配色渲染一帧，`?hero=fantasy|minotaur|rabbit`），截图在 `docs/images/mock-v02-heroes.png`。等用户对画面的反馈。
@@ -112,6 +122,7 @@
 | 用户 + Codex | Unity 预告片和过场视频 | `unity` 分支的 `unity/` |
 
 ## 七、下一步（网页版 v0.2，按顺序）
+> **10-31 04:20 起的顺序：** ① 用户醒来（06:30）试第一幕，按反馈改。② 第二幕「阳台」：花园地面、朱丽叶在阳台上喊话（台词在 docs/对白.md）、鼓怪、三头犬中途 Boss（`assets/sprites/cerberus.png`），幕末布朗那幅画。③ 第三幕「决斗」：广场、茂丘西奥倒下、提伯尔特 Boss，迪克西那幅画。④ 第四幕「墓室」：朱丽叶躺在中间、45 秒醒来倒计时、"安稳"值，两种结局两幅画。⑤ 暂停和静音键、自动降画质。⑥ Codex 的地块 GLB 换进来。15:00 停止加功能。下面 1 到 7 是旧的顺序，前 4 条已经做完。
 > 10-31 02:50 的实际顺序：第 1、2 步已经做完（模型已处理、GLTFLoader 已放好）。下一步直接写 `src/game.js` 的第一幕，场地照 `assets/ref/scene-1-ballroom.png` 做简化版，幕结束弹出名画卡（`assets/paintings/act1-masquerade.jpg`）。
 > 10-31 03:00 补充：第一幕要带上对白（序幕、打斗中喊话、幕末、幕间选回答），台词从 [docs/对白.md](docs/对白.md) 搬进 `src/dialogue.js`。
 1. 在沙盒装 Blender（命令见第九节，约 35 秒），把四个模型减到 5000 到 8000 面、贴图缩到 1024 JPG、去掉法线和金属度贴图，每个 0.5 MB 以内，存到 `assets/models/`（文件名不变）。原文件留在 `raw/`。
@@ -144,7 +155,9 @@
 | `docs/制作流程.md`、`docs/素材清单.md` | 对照小王子的流程、模型清单（Q 版提示词已作废） |
 | `docs/性能和现场.md`、`docs/模型和下一步.md` | 卡不卡的分析和测试结果、模型的分析和下一步 |
 | `docs/images/` | 预览图和截图 |
-| `tools/` | 测试工具（见第九节）、模型处理 `process-models.mjs`、出图 `gen-image.mjs`、拼图 `contact-sheet.mjs`、画面样张 `mock/` |
+| `tools/` | 测试工具（见第九节）、模型处理 `process-models.mjs`、出图 `gen-image.mjs`、拼图 `contact-sheet.mjs`、画面样张 `mock/`、怪物立牌 `make-sprites.mjs` |
+| `src/boot.js`、`src/game.js`、`src/dialogue.js` | 入口（`?test=1` 进压力测试）、正式游戏（v0.2 第一幕）、对白和名画卡的文字 |
+| `assets/sprites/` | 参考图去掉白底做的怪物立牌（6 张，最长边 256 或 384） |
 | `assets/ref/生成记录.md` | AI 出的每张参考图的模型、花费、参考图、提示词 |
 | `assets/paintings/` | **名画卡用的画**：我们重画的五幅油画（JPG），README 里写着每幅致敬的原作 |
 | `assets/ref/painting-*.png`、`assets/ref/scene-*.png` | 五幅油画和四幕场景图的原图 |
@@ -155,6 +168,8 @@
 ## 九、怎么测试（在 Kiro Web 沙盒里）
 - 沙盒的系统盘和家目录是只读的，工具都装在工作区里、仓库外面的 `/projects/sandbox/.tools`。新会话先运行 `bash tools/setup.sh`（约 1 分钟，装无界面浏览器、three.js、中文字体）。
 - 截图：`bash tools/shot.sh <网页文件夹> <输出图片> [等待毫秒]`。压力测试：`TOOLS=/projects/sandbox/.tools node tools/stress.mjs . 150,300,500`。线上检查：`TOOLS=/projects/sandbox/.tools node tools/live.mjs "https://historycrew5423-art.github.io/nai/?t=时间戳" 输出.png`。
+- 正式游戏的机器人试玩：`bash tools/play.sh . 截图文件夹 70`（自动跳过对话和选卡、乱走，打印每次升级的时间、每秒的状态和报错）。界面走一遍：`TOOLS=/projects/sandbox/.tools node tools/ui-shots.mjs . 截图文件夹 14`（像真人一样点：开始、对话、选卡、幕末、名画卡、选回答、结束，各截一张；14 是把第一幕缩短到 14 秒）。两个不要同时跑，CPU 不够，游戏会变慢。
+- 沙盒里新写的文件，有时要等几秒才看得到（读图片报"找不到文件"就等一下再读）。
 - 沙盒没有显卡（CPU 模拟），帧数只看趋势；不能跑长期运行的服务器，发布靠 GitHub Pages。
 - 两个仓库在沙盒里的位置：`/projects/sandbox/nai`（比赛仓库，`dev` 分支）和 `/projects/sandbox/3d-`（知识库，`handoff-pack` 分支）。不在的话：`cd /projects/sandbox && git clone https://github.com/historycrew5423-art/nai.git && git -C nai checkout dev`，以及 `git clone --branch handoff-pack --single-branch https://github.com/historycrew5423-art/3d-.git`。下面的命令都在 `/projects/sandbox/nai` 里运行。
 - Blender：`bash /projects/sandbox/3d-/tools/blender/setup.sh`（装到 `/projects/sandbox/.tools`），之后用 `/projects/sandbox/.tools/blender-py 脚本.py` 运行脚本。3d- 仓库的 `tools/blender/trial/process_model.py` 是以前整理模型（缩放、落地、减面、导出）的示例，可以参考。
