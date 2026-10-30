@@ -18,6 +18,9 @@
 ## 工具
 - `tools/setup.sh`：在 Kiro Web 沙盒里装好无界面浏览器、three.js 和中文字体（装在仓库外的 `.tools`）。
 - `tools/shot.sh`：用无界面浏览器打开本地网页并截图，打印报错和帧数，让 AI 自己检查画面。
+- `tools/stress.mjs`、`tools/live.mjs`：压力测试、检查线上网址。
+- `tools/process-models.mjs`：把 Tripo 原始模型处理成手机能用的版本。
+- `tools/gen-image.mjs`：用 GPT-image-2.5 出参考图（只用每张 0.3 积分的模型，密钥不进仓库）；`tools/contact-sheet.mjs`：把几张图拼成一张小图。
 
 ## 素材和许可
 用到的开源素材会逐个列在这里，写明来源和许可。
