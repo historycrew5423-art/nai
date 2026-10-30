@@ -30,13 +30,14 @@ scene.background = new THREE.Color(0x14121c);
 scene.fog = new THREE.Fog(0x14121c, 17, 33);
 const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 80);
 
+let pixelCap = 1.75;   // 清晰度上限；帧数低时自动往下调（见主循环）
 function layout() {
   const portrait = innerHeight > innerWidth;
   document.body.classList.toggle('portrait', portrait);
   const w = Math.min(innerWidth, innerHeight * 16 / 9), h = w * 9 / 16;
   stage.style.width = w + 'px'; stage.style.height = h + 'px';
   stage.style.setProperty('--u', (h / 100) + 'px');
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, pixelCap));
   renderer.setSize(w, h, false);
 }
 addEventListener('resize', layout);
@@ -654,8 +655,9 @@ function mouseAim() {
 let actx = null;
 const MELODY = [0, 4, 7, 9, 7, 4, 2, 4, 0, 4, 7, 12, 9, 7, 4, 2];
 function initAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch { actx = null; } }
+let muted = false;
 function pluck(semi, vol = 0.05, dur = 0.35, type = 'triangle') {
-  if (!actx) return;
+  if (!actx || muted) return;
   const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
   o.type = type; o.frequency.value = 392 * Math.pow(2, semi / 12);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
@@ -676,6 +678,8 @@ ui.innerHTML = `
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
 <div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：四幕都能玩了</p></div>
+<div id="tools" class="hide"><button class="b-pause">暂停</button><button class="b-mute">声音 开</button></div>
+<div id="pause" class="hide" data-ui><h2>暂停</h2><button class="b-resume">继续</button><button class="b-restart">从头开始</button></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
 const $ = (s) => ui.querySelector(s);
 const show = (el, on = true) => el.classList.toggle('hide', !on);
@@ -797,7 +801,7 @@ function beginAct(n, retry) {
   if (n === 4) { player.z = 3.2; if (juliet) { juliet.visible = true; layJuliet(true); } }
   setAct(n);
   $('#actinfo b').textContent = ACTS[n].name;
-  show($('#bars')); show($('#actinfo'));
+  show($('#bars')); show($('#actinfo')); show($('#tools'));
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
   setTimeout(() => show(at, false), 2600);
   phase = 'fight';
@@ -825,7 +829,7 @@ async function endAct(good) {
   if (hero) { player.aimX = 0.45; player.aimZ = -0.9; }
   await sleep(AUTO ? 50 : 1400);
   flushOrbs();
-  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false);
+  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false);
   await playScene(SCENES[`act${act}End`]);
   phase = 'card';
   stage.classList.add('freeze');
@@ -846,7 +850,7 @@ async function tombEnding(good) {
     stage.classList.add('freeze');
   }
   await sleep(AUTO ? 50 : 1400);
-  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false);
+  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false);
   await playScene(SCENES[good ? 'goodEnd' : 'badEnd']);
   phase = 'card'; stage.classList.add('freeze');
   await sleep(AUTO ? 50 : 900);
@@ -882,7 +886,7 @@ async function die() {
   phase = 'dead';
   show($('#bark'), false); show($('#boss'), false);
   await sleep(AUTO ? 50 : 1200);
-  show($('#bars'), false); show($('#actinfo'), false);
+  show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false);
   await playScene([['narrator', DEATH[act]]]);
   const btns = act > 1 ? [['从这一幕重来', 'act'], ['从头开始', 'all']] : [['再来一次', 'all']];
   const v = await paintingCard(act, { lead: `你在${ACT_NO[act]}幕倒下了。先看看这一幕的名画：`, buttons: btns });
@@ -1219,7 +1223,8 @@ function draw(dt) {
   // 镜头：打的时候跟着主角；幕结束时拉近；名画定格时拉起
   const want = phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1;
   camDist += (want - camDist) * Math.min(1, dt * 2.2);
-  camTarget.set(player.x + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
+  const panX = phase === 'title' || phase === 'over' ? 5.5 : 0;   // 开始和结束画面：镜头往右平移，主角站到画面左边，别挡住标题
+  camTarget.set(player.x + panX + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
   camera.position.lerp(camTarget, Math.min(1, dt * 7));
   camera.lookAt(camera.position.x - CAM.x * camDist, phase === 'actEnd' ? 0.9 : 0, camera.position.z - CAM.z * camDist);
   renderer.render(scene, camera);
@@ -1238,6 +1243,13 @@ function draw(dt) {
     if (act === 4) { $('#calm i').style.width = Math.max(0, calm) + '%'; calmHit -= dt; $('#calm').classList.toggle('hit', calmHit > 0); }
   }
 }
+
+// ---------- 暂停、声音 ----------
+let pausedFrom = null;
+$('#tools .b-pause').onclick = () => { if (phase !== 'fight') return; pausedFrom = phase; phase = 'paused'; show($('#pause')); };
+$('#pause .b-resume').onclick = () => { show($('#pause'), false); phase = pausedFrom || 'fight'; pausedFrom = null; };
+$('#pause .b-restart').onclick = () => { show($('#pause'), false); pausedFrom = null; show($('#boss'), false); show($('#calm'), false); startRun(true); };
+$('#tools .b-mute').onclick = (e) => { muted = !muted; e.target.textContent = muted ? '声音 关' : '声音 开'; };
 
 // ---------- 开始画面 ----------
 let titleReady = false;
@@ -1261,19 +1273,21 @@ window.__game = {
 
 // ---------- 主循环 ----------
 setAct(1);
-let last = performance.now(), frames = 0, fpsT = last;
+let last = performance.now(), frames = 0, fpsT = last, slowSecs = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(1 / 30, (now - last) / 1000); last = now;
   if (document.body.classList.contains('portrait')) return;
   if (slowmo > 0) dt *= 0.25;
-  if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead') step(dt);
+  if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead' && phase !== 'paused') step(dt);
   else if (phase === 'levelup' && slowmo > 0) step(dt);
   else stepFx(dt);
   draw(dt);
   frames++;
   if (now - fpsT >= 1000) {
     window.__fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now;
+    // 自动降画质：打斗中连续 2 秒低于 40 帧，清晰度降一档（最低 1），不再升回去
+    if (phase === 'fight' && window.__fps < 40) { slowSecs++; if (slowSecs >= 2 && pixelCap > 1 && renderer.getPixelRatio() > 1) { pixelCap = Math.max(1, renderer.getPixelRatio() - 0.25); layout(); slowSecs = 0; } } else slowSecs = 0;
     if (DEBUG) { const info = renderer.info.render; $('#fps').textContent = `${window.__fps.toFixed(0)} 帧 · 怪 ${E.n} · 音符 ${B.n} · ${(info.triangles / 1000).toFixed(0)}k 面 · ${info.calls} 次绘制`; }
   }
 }
