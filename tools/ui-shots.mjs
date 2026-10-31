@@ -13,7 +13,8 @@ const [root = '.', outDir = '/tmp/ui'] = process.argv.slice(2);
 await mkdir(outDir, { recursive: true });
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+// VW、VH 改画面大小，比如 iPhone 横屏 844×390；TOUCH=1 模拟触屏
+const page = await browser.newPage({ viewport: { width: +process.env.VW || 960, height: +process.env.VH || 540 }, hasTouch: !!process.env.TOUCH, isMobile: !!process.env.TOUCH, deviceScaleFactor: process.env.TOUCH ? 2 : 1 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

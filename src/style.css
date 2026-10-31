@@ -140,7 +140,7 @@ body.portrait #rotate { display: flex; }
 #calm .bossbar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #f2ede4, #ffd99a); box-shadow: 0 0 8px #ffb85c; }
 #calm.hit .bossbar { border-color: #ff6a6a; box-shadow: 0 0 10px #ff4a4a; }
 #calm.hit b { color: #ffb0b0; }
-#tools { position: absolute; right: calc(var(--u) * 2.5); top: calc(var(--u) * 10.5); display: flex; gap: calc(var(--u) * 1.2); }
+#tools { position: absolute; right: calc(var(--u) * 2.5); top: calc(var(--u) * 13); display: flex; gap: calc(var(--u) * 1.2); }
 #tools button, #pause button { font-family: inherit; color: #f2ede4; font-size: calc(var(--u) * 2.4); background: rgba(20,18,28,.7);
   border: 1px solid rgba(217,164,65,.6); border-radius: 99px; padding: calc(var(--u) * .6) calc(var(--u) * 1.8); cursor: pointer; }
 #pause { position: absolute; inset: 0; background: rgba(8,6,12,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 2.5); }
