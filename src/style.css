@@ -33,7 +33,7 @@ html, body {
   font: 18px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
 }
 #rotate small { font-size: 13px; opacity: .7; }
-body.portrait #rotate { display: flex; }
+body.portrait #rotate { display: none; }   /* 10-31 第 57 轮：竖屏也能玩，不再提示横过来 */
 
 /* ---------- 正式游戏的界面（src/game.js）。--u 是画面高度的 1%，字和框跟着画面大小缩放 ---------- */
 #ui { position: absolute; inset: 0; pointer-events: none; color: #f2ede4;
@@ -364,3 +364,26 @@ body.portrait #rotate { display: flex; }
 #cards button .recipe { font-style: normal; font-size: calc(var(--u) * 2.1); color: #ffb4c0; }
 #cards .reroll { margin-top: calc(var(--u) * 2.4); font-family: inherit; font-size: calc(var(--u) * 2.6); color: #f2ede4; background: rgba(40, 30, 50, .85); border: 1px solid #c99a4a; border-radius: 99px; padding: calc(var(--u) * .8) calc(var(--u) * 3); }
 #cards .reroll { width: auto !important; min-height: 0 !important; display: inline-block !important; box-shadow: none !important; animation: none !important; gap: 0 !important; }
+
+/* ---------- 竖屏（10-31 第 57 轮） ---------- */
+#stage.portrait #cards .row { flex-direction: column; gap: calc(var(--u) * 2.4); }
+#stage.portrait #cards button { width: calc(var(--u) * 80); min-height: calc(var(--u) * 26); padding: calc(var(--u) * 2.2) calc(var(--u) * 3); }
+#stage.portrait #cards h2 { font-size: calc(var(--u) * 5.4); text-align: center; padding: 0 calc(var(--u) * 4); }
+#stage.portrait #dlg .box, #stage.portrait #dlg.side-left .box, #stage.portrait #dlg.side-right .box { left: 4%; right: 4%; bottom: calc(var(--u) * 6 + var(--sb)); min-height: calc(var(--u) * 26); }
+#stage.portrait #dlg .por { height: 30%; bottom: calc(var(--u) * 34 + var(--sb)); }
+#stage.portrait #dlg .txt { font-size: calc(var(--u) * 4.6); }
+#stage.portrait #title .stories { flex-direction: column; gap: calc(var(--u) * 3); }
+#stage.portrait #title .story { width: calc(var(--u) * 90); height: calc(var(--u) * 58); }
+#stage.portrait #title .thead { padding-top: calc(var(--u) * 8); }
+#stage.portrait #title .tfoot { flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 1.6); }
+#stage.portrait #art { flex-direction: column; overflow-y: auto; }
+#stage.portrait #art .frame { height: 42%; }
+#stage.portrait #art .frame img { height: 100%; width: auto; max-width: 92vw; object-fit: contain; }
+#stage.portrait #art .info { max-width: 90%; }
+#stage.portrait #cover .clogo { top: calc(var(--u) * 30); }
+#stage.portrait #cover .clogo h1 { font-size: calc(var(--u) * 11); }
+#stage.portrait #actinfo b { font-size: calc(var(--u) * 4); }
+#stage.portrait #bark { top: calc(var(--u) * 30); max-width: 86%; }
+#stage.portrait #shop .items { flex-wrap: wrap; } #stage.portrait #shop .items button { width: calc(var(--u) * 40); }
+#stage.portrait #combo { top: 46%; }
+#stage.portrait #mem .inner, #stage.portrait #how .inner { max-width: 92%; }

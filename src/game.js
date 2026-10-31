@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031l';
-import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031l';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031l';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031l';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031l';
+import { Input } from './input.js?v=20261031m';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031m';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031m';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031m';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031m';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -37,13 +37,17 @@ const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 80);
 let pixelCap = 1.75;   // 清晰度上限；帧数低时自动往下调（见主循环）
 // 画面铺满整个浏览器窗口（10-31 用户说手机上不是全屏：原来固定 16:9，两边留黑边）。
 // 微信里横屏，上下有两条栏，剩下的地方大约 3:1，也要铺满；比 3.3:1 还宽才在两边留边。镜头的竖直视角不变，屏幕越宽，左右看得越远。
+// 10-31 第 57 轮：竖着拿也能玩（参考队友版）。竖屏铺满整个屏幕，镜头视角放大、高一点，界面单位按屏幕短边算
+let PORTRAIT = false;
 function layout() {
   const W = innerWidth, H = innerHeight;
-  const portrait = H > W;
+  const portrait = H > W; PORTRAIT = portrait;
   document.body.classList.toggle('portrait', portrait);
-  const h = H, w = Math.min(W, H * 3.3);
+  const h = H, w = portrait ? W : Math.min(W, H * 3.3);
   stage.style.width = w + 'px'; stage.style.height = h + 'px';
-  stage.style.setProperty('--u', (Math.min(h, w * 9 / 16) / 100) + 'px');
+  stage.style.setProperty('--u', (portrait ? w * 0.95 / 100 : Math.min(h, w * 9 / 16) / 100) + 'px');
+  stage.classList.toggle('portrait', portrait);
+  camera.fov = portrait ? 66 : 45;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(devicePixelRatio, pixelCap));
   renderer.setSize(w, h, false);
@@ -200,6 +204,11 @@ function islandFloor() {
 const floors = { 1: ballroomFloor() };
 const FLOOR_FN = { 2: gardenFloor, 3: piazzaFloor, 4: tombFloor, 5: islandFloor };
 const floorTex = floors[1]; floorTex.repeat.set(3, 3);
+// 10-31 第 57 轮：第一幕"不够豪华"。舞厅地面换成 GPT 画的宫殿大理石拼花（无缝），下好之前先用原来的
+new THREE.TextureLoader().load('assets/textures/floor-ballroom.jpg', (t) => {
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(14, 14); t.anisotropy = renderer.capabilities.getMaxAnisotropy ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
+  floors[1] = t; if (tileAct === 1) { floor.material.map = t; floor.material.needsUpdate = true; }
+});
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 3, TILE * 3), new THREE.MeshLambertMaterial({ map: floorTex }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
@@ -209,8 +218,8 @@ const ACT1_OBS = [
   { kind: 'harp', x: 11, z: -11, r: 1.0 }, { kind: 'harp', x: -11, z: 11, r: 1.0 },
   { kind: 'candle', x: -15, z: 0, r: 0.6 }, { kind: 'candle', x: 15, z: 0, r: 0.6 },
   // 10-31 用户说第一幕"立体度差"：加一圈高大的大理石柱子（有金环），配上影子
-  { kind: 'bcolumn', x: 0, z: -15, r: 0.75 }, { kind: 'bcolumn', x: 0, z: 15, r: 0.75 },
-  { kind: 'bcolumn', x: -16, z: -16, r: 0.75 }, { kind: 'bcolumn', x: 16, z: 16, r: 0.75 }, { kind: 'bcolumn', x: 16, z: -16, r: 0.75 }, { kind: 'bcolumn', x: -16, z: 16, r: 0.75 },
+  // 舞池四周一圈柱廊：10 根大理石柱，柱顶用拱连起来（buildTile 里画拱），两家的红旗、蓝旗挂在柱子上
+  ...Array.from({ length: 10 }, (_, k) => { const a = k / 10 * Math.PI * 2 + 0.31; return { kind: 'bcolumn', x: Math.cos(a) * 7.2, z: Math.sin(a) * 7.2, r: 0.62, k }; }),
 ];
 const ACT2_OBS = [
   { kind: 'fountain', x: -11, z: -11, r: 2.0 }, { kind: 'statue', x: 11, z: -11, r: 1.0 }, { kind: 'hedge', x: 11, z: 11, r: 2.0 },
@@ -230,6 +239,7 @@ const ACT5_OBS_OLD = [
 ];
 const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS, 5: [] };   // 第五幕的障碍物在 island.js 里（不重复，按世界坐标）
 const MAT = {
+  blueBanner2: new THREE.MeshLambertMaterial({ color: 0x2a4a9a, emissive: 0x081028, side: THREE.DoubleSide }),
   hedge: new THREE.MeshLambertMaterial({ color: 0x2b5236 }),
   leaf: new THREE.MeshLambertMaterial({ color: 0x2f5c34 }),
   orange: new THREE.MeshLambertMaterial({ color: 0xe38a2c, emissive: 0x3a1a04 }),
@@ -371,6 +381,18 @@ function buildTile(act) {
       put('canvas', new THREE.CylinderGeometry(0.75, 0.75, 2.6, 10, 1, true, 0, Math.PI), x, 1.15, z, 0, 0, Math.PI / 2, 1);
       put('wood', new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4), x + 1.2, 1.9, z);
       put('blueBanner', new THREE.PlaneGeometry(0.7, 0.45), x + 1.55, 2.45, z);
+    } else if (o.kind === 'bcolumn' && o.k !== undefined) {   // 柱廊的柱子：底座、柱身、金环、柱头，和下一根柱子之间架一道拱
+      put('stone', new THREE.BoxGeometry(1.2, 0.4, 1.2), x, 0.2, z);
+      put('marble', new THREE.CylinderGeometry(0.32, 0.38, 1.9, 14), x, 1.35, z);   // 别太高：镜头从上往下看，近处的柱子和拱会挡住人
+      put('gold', new THREE.TorusGeometry(0.36, 0.05, 6, 16), x, 0.5, z, Math.PI / 2);
+      put('gold', new THREE.TorusGeometry(0.34, 0.05, 6, 16), x, 2.25, z, Math.PI / 2);
+      put('marble', new THREE.BoxGeometry(0.9, 0.26, 0.9), x, 2.42, z);
+      const a0 = o.k / 10 * Math.PI * 2 + 0.31, a1 = (o.k + 1) / 10 * Math.PI * 2 + 0.31, mx = (Math.cos(a0) + Math.cos(a1)) / 2 * 7.2, mz = (Math.sin(a0) + Math.sin(a1)) / 2 * 7.2;
+      const span = Math.hypot(Math.cos(a1) - Math.cos(a0), Math.sin(a1) - Math.sin(a0)) * 7.2, ry = Math.atan2(-(Math.sin(a1) - Math.sin(a0)), Math.cos(a1) - Math.cos(a0));
+      put('marble', new THREE.TorusGeometry(span / 2, 0.14, 6, 18, Math.PI).scale(1, 0.38, 1), mx, 2.55, mz, 0, ry);   // 压扁的拱
+      put('gold', new THREE.TorusGeometry(span / 2 + 0.15, 0.035, 4, 18, Math.PI).scale(1, 0.38, 1), mx, 2.55, mz, 0, ry);
+      put(o.k % 2 ? 'blueBanner' : 'redBanner', new THREE.PlaneGeometry(0.55, 1.2), x * 1.07, 1.55, z * 1.07, 0, Math.atan2(x, z));
+      flame(x, 2.7, z);
     } else if (o.kind === 'bcolumn') {
       put('stone', new THREE.BoxGeometry(1.5, 0.5, 1.5), x, 0.25, z);
       put('gold', new THREE.TorusGeometry(0.56, 0.06, 6, 16), x, 0.62, z, Math.PI / 2);
@@ -489,7 +511,7 @@ let tileIX = 1e9, tileIZ = 1e9;
 // 换一幕：换地面、地块、灯光
 const LOOKS = {
   // 10-31 用户在手机上看"黑屏的很多"：维罗纳四幕原来太暗，整体调亮
-  1: { bg: 0x1c1826, hemi: [0x9aa0d8, 0x3a2a3a, 2.2], moon: [0xb0c0ff, 1.4] },
+  1: { bg: 0x241a20, hemi: [0xffe2c8, 0x40282c, 1.05], moon: [0xffcf94, 1.25], sun: [-9, 13, -6] },   // 舞厅：暖金色的灯光、长一点的影子
   2: { bg: 0x142030, hemi: [0x8aa6d8, 0x24382f, 2.0], moon: [0xb8ccff, 2.0] },
   3: { bg: 0x2e1f2a, hemi: [0xffd0a0, 0x4a3a50, 1.6], moon: [0xffb070, 2.3], sun: [-14, 7, 2] },
   4: { bg: 0x101018, hemi: [0x7080b8, 0x1c1c2a, 1.6], moon: [0x90b0ff, 1.0] },
@@ -2165,6 +2187,35 @@ function stepQuills(dt) {
   }
 }
 
+// ---------- 舞厅的气氛：悬在半空慢慢浮动的蜡烛、飘落的玫瑰花瓣（只在第一幕；按 40 米一格循环，地图还是无限的） ----------
+const FC_N = 30, PET_N = 70;
+const fcBody = flatInst(new THREE.CylinderGeometry(0.07, 0.07, 0.34, 6), new THREE.MeshLambertMaterial({ color: 0xf6eedc, emissive: 0x6a5030 }), FC_N);
+const fcGlow = flatInst(billboardGeo(1.1, 1.1, true), additive(glowTex('255,190,100'), 0.85), FC_N);
+const petalTex = canvasTex(32, (g, s2) => { g.fillStyle = '#e8506a'; g.beginPath(); g.ellipse(s2 / 2, s2 / 2, s2 * 0.42, s2 * 0.26, 0.6, 0, Math.PI * 2); g.fill(); g.fillStyle = 'rgba(255,190,200,.6)'; g.beginPath(); g.ellipse(s2 * 0.45, s2 * 0.45, s2 * 0.18, s2 * 0.1, 0.6, 0, Math.PI * 2); g.fill(); });
+const petals = flatInst(new THREE.PlaneGeometry(0.22, 0.22), new THREE.MeshBasicMaterial({ map: petalTex, transparent: true, side: THREE.DoubleSide, depthWrite: false }), PET_N);
+let fcSeed = 7; const fcR = () => ((fcSeed = (fcSeed * 16807) % 2147483647) / 2147483647);
+const FC = Array.from({ length: FC_N }, () => ({ x: fcR() * 40, z: fcR() * 40, y: 2.4 + fcR() * 1.4, ph: fcR() * 6 }));
+const PET = Array.from({ length: PET_N }, () => ({ x: fcR() * 30, z: fcR() * 30, y: fcR() * 6, ph: fcR() * 6, sp: 0.5 + fcR() * 0.5 }));
+const wrapNear = (v, p, L) => p + ((((v - p) % L) + L * 1.5) % L) - L / 2;
+const m4b = new THREE.Matrix4(), q4b = new THREE.Quaternion(), e4b = new THREE.Euler(), v4b = new THREE.Vector3(), s4b = new THREE.Vector3(1, 1, 1);
+function drawBallroom(dt) {
+  const on = tileAct === 1 && phase !== 'title';
+  fcBody.visible = fcGlow.visible = petals.visible = on; if (!on) return;
+  const ba = fcBody.instanceMatrix.array, ga = fcGlow.instanceMatrix.array;
+  FC.forEach((c, i) => {
+    const x = wrapNear(c.x, player.x, 40), z = wrapNear(c.z, player.z - 4, 40), y = c.y + Math.sin(time * 1.2 + c.ph) * 0.18;
+    writeMatrix(ba, i, x, y, z, 1, 1, 1); writeMatrix(ga, i, x, y + 0.26, z, 0.8 + Math.sin(time * 9 + c.ph) * 0.06, 0.8, 0.8);
+  });
+  fcBody.count = fcGlow.count = FC_N; fcBody.instanceMatrix.needsUpdate = fcGlow.instanceMatrix.needsUpdate = true;
+  const pa = petals.instanceMatrix.array;
+  PET.forEach((p, i) => {
+    p.y -= dt * p.sp; if (p.y < 0) { p.y = 5 + fcR() * 2; p.x = fcR() * 30; p.z = fcR() * 30; }
+    const x = wrapNear(p.x + Math.sin(time * 0.8 + p.ph) * 0.6, player.x, 30), z = wrapNear(p.z, player.z - 3, 30);
+    e4b.set(time * 2 + p.ph, time * 1.3 + p.ph, 0); q4b.setFromEuler(e4b); m4b.compose(v4b.set(x, p.y, z), q4b, s4b); m4b.toArray(pa, i * 16);
+  });
+  petals.count = PET_N; petals.instanceMatrix.needsUpdate = true;
+}
+
 // ---------- 伴舞大游行：被歌声打动的怪，有三成会跟在奶娃后面排队跳舞，还会一起唱歌打怪；被打中跑掉几个 ----------
 const MAX_F = 40, TRAIL = 256;
 const F = { n: 0, type: new Uint8Array(MAX_F), x: new Float32Array(MAX_F), z: new Float32Array(MAX_F), cd: new Float32Array(MAX_F), ph: new Float32Array(MAX_F) };
@@ -2262,6 +2313,7 @@ const camTarget = new THREE.Vector3(), shakeV = new THREE.Vector3();
 let camDist = 1;
 function draw(dt) {
   stepDust(dt); if (phase === 'fight') stepCombo(dt);
+  drawBallroom(dt);
   drawHazards();
   { let nc = 0; const cm = crownMesh.instanceMatrix.array; for (let i = 0; i < E.n && nc < 32; i++) if (E.elite[i]) writeMatrix(cm, nc++, E.x[i], TYPES[E.type[i]].h * 1.55 + 0.5 + Math.sin(time * 4) * 0.1, E.z[i], 0.9, 0.9, 0.9); crownMesh.count = nc; crownMesh.instanceMatrix.needsUpdate = true; }
   counts.fill(0); fcounts.fill(0);
@@ -2411,9 +2463,9 @@ function draw(dt) {
   }
 
   // 镜头：打的时候跟着主角；幕结束时拉近；名画定格时拉起
-  const want = (phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1) * (act === 5 ? 1.12 : 1);   // 海岛镜头高一点，多看到海
+  const want = (phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1) * (act === 5 ? 1.12 : 1) * (PORTRAIT ? 1.08 : 1);   // 海岛镜头高一点，多看到海
   camDist += (want - camDist) * Math.min(1, dt * 2.2);
-  const panX = phase === 'title' || phase === 'over' ? 5.5 : 0;   // 开始和结束画面：镜头往右平移，主角站到画面左边，别挡住标题
+  const panX = (phase === 'title' || phase === 'over') && !PORTRAIT ? 5.5 : 0;   // 开始和结束画面：镜头往右平移，主角站到画面左边，别挡住标题
   camTarget.set(player.x + panX + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
   camera.position.lerp(camTarget, Math.min(1, dt * 7));
   camera.lookAt(camera.position.x - CAM.x * camDist, phase === 'actEnd' ? 0.9 : 0, camera.position.z - CAM.z * camDist);
@@ -2626,7 +2678,6 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(1 / 30, (now - last) / 1000); last = now;
   if (hitStop > 0) { hitStop -= dt; dt *= 0.05; }   // 打死大怪时画面顿一下
-  if (document.body.classList.contains('portrait')) return;
   if (slowmo > 0) { if (phase !== 'levelup') slowmo -= dt; dt *= 0.25; }   // 慢动作（升级前、茂丘西奥倒下时）按真实时间倒数
   if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead' && phase !== 'paused') step(dt);
   else if (phase === 'levelup' && slowmo > 0) step(dt);
