@@ -387,3 +387,14 @@ body.portrait #rotate { display: none; }   /* 10-31 第 57 轮：竖屏也能玩
 #stage.portrait #shop .items { flex-wrap: wrap; } #stage.portrait #shop .items button { width: calc(var(--u) * 40); }
 #stage.portrait #combo { top: 46%; }
 #stage.portrait #mem .inner, #stage.portrait #how .inner { max-width: 92%; }
+
+#cards .reroll.hide { display: none !important; }
+/* 大招按钮：右下角的圆，外圈按能量转满；攒满了发光 */
+#ult { position: absolute; right: calc(var(--u) * 4 + var(--sr)); bottom: calc(var(--u) * 6 + var(--sb)); width: calc(var(--u) * 15); height: calc(var(--u) * 15); border-radius: 50%; border: 0; z-index: 3;
+  background: conic-gradient(#ffd060 calc(var(--f, 0) * 360deg), rgba(255,255,255,.15) 0); padding: calc(var(--u) * 1); font-family: var(--serif, serif); }
+#ult i { position: absolute; inset: calc(var(--u) * 1); border-radius: 50%; background: radial-gradient(circle at 50% 35%, #ffe680, #e0a020 70%); filter: grayscale(.7) brightness(.7); }
+#ult b { position: relative; font-size: calc(var(--u) * 3.6); font-weight: 900; color: #3a2408; }
+#ult.ready i { filter: none; box-shadow: 0 0 calc(var(--u) * 3) rgba(255, 210, 80, .9); animation: ultpulse .8s infinite alternate; }
+@keyframes ultpulse { to { transform: scale(1.07); } }
+#stage.portrait #ult { width: calc(var(--u) * 20); height: calc(var(--u) * 20); bottom: calc(var(--u) * 10 + var(--sb)); }
+#laughgif { position: absolute; left: calc(var(--u) * 3 + var(--sl)); top: calc(var(--u) * 12); width: calc(var(--u) * 24); z-index: 3; pointer-events: none; filter: drop-shadow(0 0 calc(var(--u) * 2) rgba(255,220,120,.8)); }

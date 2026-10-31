@@ -65,6 +65,8 @@
 ## 素材和许可
 - three.js r187（MIT），放在 `vendor/three/`。
 - 海岛的树、灌木、花、草、蕨、石头：Quaternius「Stylized Nature MegaKit」（CC0，来自 [OpenGameArt](https://opengameart.org/content/stylized-nature-megakit)），挑了 14 样打包成 `assets/models/kit-nature.glb`。
+- 大招“捧腹大笑”的大奶蛙模型（队友用 Tripo 做的，来自 naiwa/），捧腹大笑动图和笑声来自 [Nailong-Studio/NaiWa-Wallpaper](https://github.com/Nailong-Studio/NaiWa-Wallpaper)，原作者 [liaosongjie/Codex-Voice-Input](https://github.com/liaosongjie/Codex-Voice-Input)，MIT 许可。
+- 舞厅地面：GPT-image-2.5 画的无缝大理石拼花（`assets/textures/floor-ballroom.jpg`）。
 - 维罗纳四幕的道具（餐桌、烛台、椅子、酒桶、集市摊等 28 样）：Quaternius「Fantasy Props MegaKit」标准免费版（CC0），从 GitHub 的 agentkaerf/FreeModels 下载，用 `tools/build-kit.mjs` 合成 `assets/models/kit-verona.glb`。
 - 棕榈树、叠石山、石拱门：GPT 出参考图（`assets/ref/prop-*.png`），Tripo 生成（`assets/models/props/`）。
 - 角色模型：用户用 Tripo 生成（`assets/models/`）。参考图：用户和 AI 用出图工具生成（`assets/ref/`，AI 出的图记在 `assets/ref/生成记录.md`）。
