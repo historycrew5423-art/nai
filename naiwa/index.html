@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>罗密欧与朱丽叶 · 奶蛙缝合版</title>
+<link rel="stylesheet" href="src/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="hud">加载中……</div>
+  <div id="buttons">
+    <button id="b-less">怪 −100</button>
+    <button id="b-more">怪 +100</button>
+    <button id="b-shots">子弹 ×1</button>
+    <button id="b-quality">画质 高</button>
+    <button id="b-god">无敌 开</button>
+  </div>
+</div>
+<div id="rotate">请把手机横过来<small>转不过来的话，先关掉控制中心里的"竖排方向锁定"</small></div>
+<script type="module" src="src/boot.js"></script>
+</body>
+</html>
