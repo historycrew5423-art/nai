@@ -195,7 +195,7 @@
 ## 十、Git 规则
 - 开发在 `dev` 分支，`main` 只有建仓库时的第一个提交，最后再合并。GitHub Pages 从 `dev` 发布。
 - 每一步一个提交，说明用中文写清做了什么。推送后用 `git fetch` 对比本地和远端，确认真的上去了。
-- 推送前检查有没有密钥和个人信息：`git grep -nIE 'eyJ[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{16,}|[A-Za-z0-9._%+-]+@(qq|163|126|gmail|outlook|foxmail)\.com|(^|[^0-9])1[3-9][0-9]{9}([^0-9]|$)' -- . ':!assets' ':!vendor'` 应该没有结果。这条命令只能抓常见格式，兑换码等没有固定格式，写对话原文时要自己留意打码。
+- 推送前检查有没有密钥和个人信息：`git grep -nIE 'fnko_[A-Za-z0-9]{20,}|tsk_[A-Za-z0-9]{16,}|tcli_[A-Za-z0-9]{16,}|eyJ[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{16,}|[A-Za-z0-9._%+-]+@(qq|163|126|gmail|outlook|foxmail)\.com|(^|[^0-9])1[3-9][0-9]{9}([^0-9]|$)' -- . ':!assets' ':!vendor'` 应该没有结果。这条命令只能抓常见格式，兑换码等没有固定格式，写对话原文时要自己留意打码。
 - Kiro Web 里如果 git 报 "No user principal found for this instance"，是这个会话没连 GitHub：让用户在 app.kiro.dev → Settings → Integrations 连接，并给 Kiro Agent 勾上 `nai` 和 `3d-` 两个仓库。
 - Kiro Agent 没有开 Pages 的权限（API 返回 403），Pages 的设置要用户在网页上点。
 - 用户上传的大文件（模型）先 `git pull --rebase` 再改，免得冲突。
