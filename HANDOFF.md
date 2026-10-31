@@ -1,5 +1,6 @@
 # 交接文件：给接手的 AI（每一轮都会更新）
 
+> **17:17 第 61 轮：** 用户要国内不用 VPN 的长期链接。做了 `site` 分支（只含运行文件，zip：https://github.com/historycrew5423-art/nai/archive/refs/heads/site.zip），让用户交给 WorkBuddy 部署到 `*.app.workbuddy.host`（队友的游戏就在那里，国内能开）。以后 dev 有改动，要重新同步 `site` 分支。
 > **17:12 第 60 轮：** 抽象版改成我们的两张地图 + 队友的梗音效（`ABSTRACT`、`pickMode`、`loadMemes`），经典版不放梗音效；队友原版 naiwa/ 用选版本画面下面的链接进。版本号 `?v=20261031r`。
 > **17:05 第 59 轮：** 主网址点封面后先选版本（`#modes`）：经典版 = 这个游戏，抽象版 = 跳到 naiwa/（队友的奶蛙缝合版，不要改）。经典版里队友的梗音效默认关着（网址加 `?meme=1` 才放）。另有 classic/（结合之前的版本）。版本号 `?v=20261031q`。
 > **16:45 第 57 轮：** 已上线（7226a21，`?v=20261031o`）：第一幕豪华（地面贴图 `assets/textures/floor-ballroom.jpg`、柱廊 `bcolumn` 带 `k`、浮动蜡烛和花瓣 `drawBallroom`）；竖屏（`layout()` 里 `PORTRAIT`，CSS `#stage.portrait`）；大招捧腹大笑（`startLaugh`、`loadFrog`、`#ult`，素材 `assets/models/bigfrog.glb`、`assets/img/naiwa-belly-laugh.gif`、`assets/audio/naiwa-pet-laugh.wav`）；每幕一次笑着复活（`die()` 开头）；舞步 `tryDodge`；小怪叫声 `monsterVoice`；倒下的样子按种类分。旧版本：`classic/`（结合之前）、`naiwa/`（队友版）都保留。
