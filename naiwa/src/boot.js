@@ -1,0 +1,9 @@
+// 入口：网址带 ?test=1 时进 v0.1 压力测试版（调怪的数量、看帧数），否则进正式游戏。
+const test = new URLSearchParams(location.search).has('test');
+if (test) {
+  document.title = '压力测试（开发用）';
+  import('./stress.js?v=20261031final');
+} else {
+  for (const id of ['hud', 'buttons']) document.getElementById(id)?.remove();
+  import('./game.js?v=20261031final');
+}
