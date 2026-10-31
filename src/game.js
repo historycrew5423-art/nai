@@ -788,6 +788,7 @@ async function loadVeronaKit() {
   if (phase !== 'fight' && phase !== 'levelup' && cur >= 1 && cur <= 4) setAct(cur);
 }
 // 在地块里摆道具（每样道具一个实例化网格，地块复制 9 份时共用几何体）。list：[x, y, z, 朝向, 高度]
+const BIG_PROPS = new Set(['Table_Large', 'Stall_Empty', 'Stall_Cart_Empty', 'Barrel', 'Barrel_Apples', 'Crate_Wooden', 'Bench', 'Chair_1', 'CandleStick_Stand', 'Chest_Wood', 'WeaponStand', 'CommonTree_3', 'CommonTree_4']);   // 小东西（盘子、杯子、蜡烛、花）不投影子，省一半
 function kitInto(g, L) {
   const K = { ...(islandKit || {}), ...(veronaKit || {}) }, m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
   for (const [name, list] of Object.entries(L)) {
@@ -796,7 +797,7 @@ function kitInto(g, L) {
     for (const p of parts) {
       const im = new THREE.InstancedMesh(p.geometry, p.material, list.length);
       list.forEach(([x, y, z, yaw, h], i) => { const sc = h / h0; q.setFromAxisAngle(up, yaw); m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sc, sc, sc)).multiply(base).multiply(p.rel); im.setMatrixAt(i, m); });
-      im.castShadow = true; im.computeBoundingSphere(); g.add(im);
+      im.castShadow = BIG_PROPS.has(name); im.computeBoundingSphere(); g.add(im);
     }
   }
 }
@@ -2399,6 +2400,10 @@ function draw(dt) {
   {   // 太阳（月亮）和影子的范围跟着主角，往画面上方多照一点
     const sun = LOOKS[tileAct]?.sun || [-6, 12, -4], tx = player.x, tz = player.z - 4;
     moon.target.position.set(tx, 0, tz); moon.position.set(tx + sun[0] * 2, sun[1] * 2, tz + sun[2] * 2);
+  }
+  if (tileAct !== 5) for (const t of tiles) {   // 只画看得到的地块（3×3 块里通常只有 2 到 4 块在画面里），手机少画一半
+    const dx = Math.abs(t.position.x - player.x), dz = t.position.z - player.z;
+    t.visible = dx < TILE / 2 + 26 && dz > -TILE / 2 - 20 && dz < TILE / 2 + 9;
   }
   if (isle && isle.sea.visible) {   // 海岛：海浪和小船动起来；海跟着主角；岛按 3×3 挪；蹚水时人往下沉一点
     isle.tick(time); isle.sea.position.x = player.x; isle.sea.position.z = player.z; updateIsle(player.x, player.z);
