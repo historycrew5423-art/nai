@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031j';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031j';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031j';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031j';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031j';
+import { Input } from './input.js?v=20261031k';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031k';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031k';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031k';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031k';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -745,30 +745,30 @@ let hero = null, juliet = null, tybalt = null, mercutio = null, caliban = null;
 const E = { n: 0, type: new Uint8Array(MAX_E), x: new Float32Array(MAX_E), z: new Float32Array(MAX_E), hp: new Float32Array(MAX_E),
   flash: new Float32Array(MAX_E), phase: new Float32Array(MAX_E), speed: new Float32Array(MAX_E), id: new Int32Array(MAX_E),
   ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E), wind: new Float32Array(MAX_E),
-  elite: new Uint8Array(MAX_E), sk: new Float32Array(MAX_E), st: new Float32Array(MAX_E), state: new Uint8Array(MAX_E), ddx: new Float32Array(MAX_E), ddz: new Float32Array(MAX_E) };   // 精英怪、技能冷却、技能状态（1 蓄力 2 冲刺 3 晕）、冲刺方向
+  maxhp: new Float32Array(MAX_E), elite: new Uint8Array(MAX_E), sk: new Float32Array(MAX_E), st: new Float32Array(MAX_E), state: new Uint8Array(MAX_E), ddx: new Float32Array(MAX_E), ddz: new Float32Array(MAX_E) };   // 精英怪、技能冷却、技能状态（1 蓄力 2 冲刺 3 晕）、冲刺方向
 // 怪射来的酸音（号角怪）
 const MAX_EB = 240;
 const EB = { n: 0, x: new Float32Array(MAX_EB), z: new Float32Array(MAX_EB), dx: new Float32Array(MAX_EB), dz: new Float32Array(MAX_EB), life: new Float32Array(MAX_EB) };
 const B = { n: 0, x: new Float32Array(MAX_B), z: new Float32Array(MAX_B), dx: new Float32Array(MAX_B), dz: new Float32Array(MAX_B),
   life: new Float32Array(MAX_B), dmg: new Float32Array(MAX_B), pierce: new Int16Array(MAX_B), bounce: new Int16Array(MAX_B),
-  size: new Float32Array(MAX_B), last: new Int32Array(MAX_B) };
+  size: new Float32Array(MAX_B), last: new Int32Array(MAX_B), tgt: new Int32Array(MAX_B) };
 const O = { n: 0, x: new Float32Array(MAX_O), z: new Float32Array(MAX_O), v: new Float32Array(MAX_O), t: new Float32Array(MAX_O) };
 let nextId = 1;
 
 const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, moving: 0, mvx: 0, mvz: 1 };   // aimZ = 1：开打前面朝镜头
 let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevels = 0;
-let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
+let roseCd = 0, magnetT = 0, time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
 let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
-const maxHp = () => 60 + stats.maxHpBonus;
-let runRoses = 0;   // 10-31 用户说太简单、血多：100 → 60
-const xpNeed = (L) => (L === 1 ? 4 : Math.round(7 * Math.pow(L, 1.5)));   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
+const maxHp = () => 80 + stats.maxHpBonus;   // 10-31：100 太简单、60 太难，取 80（再加自动调难度）
+let runRoses = 0;
+const xpNeed = (L) => (L < 4 ? [0, 3, 5, 8][L] : Math.round(5.5 * Math.pow(L, 1.5)));   // 前 30 秒左右升三级，马上有得选；之后慢下来   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
 const input = new Input();
 
 function resetRun() {
   E.n = B.n = O.n = 0;
-  player.x = player.z = 0; player.hp = 60 + stats.maxHpBonus; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
-  stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0; F.n = 0; runRoses = 0;
+  player.x = player.z = 0; player.hp = 80 + stats.maxHpBonus; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
+  stats = baseStats(); levels = { love: 1 }; level = 1; xp = 0; kills = 0; pendingLevels = 0; F.n = 0; runRoses = 0;
   stats.maxHpBonus += save.perm.hp * 10; stats.dmgMul *= 1 + save.perm.dmg * 0.1;   // 后台买的永久本事
   time = actTime = 0; fireCd = drumCd = slowmo = 0; lineIdx = 0; saidLow = false; firstLevelSaid = false; birdWaves = 0;
   act = 1; snapshot = null;
@@ -787,9 +787,9 @@ function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
   E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.wind[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
-  E.hp[i] = (t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0)) * (t.boss ? 1.2 : 1.4);
+  E.hp[i] = (t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0)) * (t.boss ? 1.2 : 1.2) * (fate.tough || 1) * (actTime < ACT_LEN * 0.45 && !t.boss ? 1.5 : 1);   // 前半段怪少而硬
   E.elite[i] = 0; E.sk[i] = 1.5 + Math.random() * 3; E.st[i] = 0; E.state[i] = 0;
-  E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
+  E.speed[i] = t.speed * (0.85 + Math.random() * 0.3) * fate.espd; E.id[i] = nextId++; E.maxhp[i] = E.hp[i];
 }
 const lowHp = () => player.hp < maxHp() * 0.35;
 function director(dt) {
@@ -798,7 +798,7 @@ function director(dt) {
   if (act === 3) { director3(dt); return; }
   if (act === 4) { director4(dt); return; }
   if (act === 5) { director5(dt); return; }
-  const target = act1Target(actTime) * 0.6 * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点；10-31 怪少一些、更凶
+  const target = act1Target(actTime) * 0.6 * ddaK();   // 血少时悄悄少出一点；10-31 怪少一些、更凶
   spawnAcc += dt * (actTime < 20 ? 1.5 : 4);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
   // 鸟嘴面具客人：第 25 秒起，每 6 秒从一个方向冲来一小群
@@ -813,7 +813,7 @@ function director(dt) {
 const DOG_AT = Math.min(22, ACT_LEN * 0.5);
 function director2(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (22 + actTime * 0.8) * 0.6 * (boss ? 0.45 : 1) * (lowHp() ? 0.75 : 1);
+  const target = (22 + actTime * 0.8) * 0.6 * (boss ? 0.45 : 1) * ddaK();
   spawnAcc += dt * 5;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(Math.random() < 0.28 ? T.drum : T.lute); }
   if (!boss && actTime > 5 + birdWaves * 7) {
@@ -832,7 +832,7 @@ const count = (ty) => { let c = 0; for (let i = 0; i < E.n; i++) if (E.type[i] =
 // 第三幕：两家的人潮最多最厚，号角怪站在远处吹酸音；第 18 秒茂丘西奥倒下，第 22 秒提伯尔特出场
 function director3(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (30 + actTime * 0.9) * 0.6 * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  const target = (30 + actTime * 0.9) * 0.6 * (boss ? 0.5 : 1) * ddaK();
   spawnAcc += dt * 5.5;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
@@ -862,7 +862,7 @@ function director3(dt) {
 // 第二部「漂岛」：被冲上岸的乐器、成群的海鸟、海浪精灵（亡魂的样子），第 22 秒卡利班出场
 function director5(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * 0.6 * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * 0.6 * (boss ? 0.5 : 1) * ddaK();
   spawnAcc += dt * 4.5;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n >= target) continue; const r = Math.random(); spawnEnemy(r < 0.4 ? T.shade : r < 0.75 ? T.lute : T.drum); }
   if (!boss && actTime > 8 + birdWaves * 7) {
@@ -879,7 +879,7 @@ function director5(dt) {
 }
 // 第四幕：亡魂从四面八方涌向石台上的朱丽叶，也有一些家丁冲着罗密欧来
 function director4(dt) {
-  const target = (16 + actTime * 0.9) * 0.7 * (lowHp() ? 0.8 : 1);
+  const target = (16 + actTime * 0.9) * 0.7 * ddaK();
   spawnAcc += dt * 4.5;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
@@ -895,18 +895,19 @@ function killEnemy(i) {
     for (let k = 0; k < 26 && O.n < MAX_O; k++) { const a = k / 26 * 6.28, d = 1 + Math.random() * 2, j = O.n++; O.x[j] = E.x[i] + Math.cos(a) * d; O.z[j] = E.z[i] + Math.sin(a) * d; O.v[j] = 1; O.t[j] = Math.random() * 6; }
     if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : t.key === 'caliban' ? TP_BOSS.down : BOSS_LINES.dogDown; bark(L.who, L.text); setTimeout(() => { if (phase === 'fight' || phase === 'actEnd') bark('shakespeare', '这……这不是我写的！'); }, 2600); }
     ring(E.x[i], E.z[i], 6, 0.8);
-  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
+  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act] * fate.xp; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
   if (E.elite[i]) dropChest(E.x[i], E.z[i]);
-  else if (!t.boss && !t.model && Math.random() < 0.3) addFan(E.type[i]);
-  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind, E.elite, E.sk, E.st, E.state, E.ddx, E.ddz]) a[i] = a[j];
+  else if (!t.boss && !t.model && Math.random() < 0.3 * fate.fan) addFan(E.type[i]);
+  launchCorpse(i, t);
+  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind, E.elite, E.sk, E.st, E.state, E.ddx, E.ddz, E.maxhp]) a[i] = a[j];
   sfxPop(t.boss);
   kills++; comboAdd();
   if (t.boss) { shake = Math.max(shake, 1.1); hitStop = 0.25; } else if (t.hp >= 9) { shake = Math.max(shake, 0.35); hitStop = Math.max(hitStop, 0.05); }
 }
 function removeBullet(i) {
   const j = --B.n;
-  for (const a of [B.x, B.z, B.dx, B.dz, B.life, B.dmg, B.pierce, B.bounce, B.size, B.last]) a[i] = a[j];
+  for (const a of [B.x, B.z, B.dx, B.dz, B.life, B.dmg, B.pierce, B.bounce, B.size, B.last, B.tgt]) a[i] = a[j];
 }
 function hurtEnemy(i, dmg, kx = 0, kz = 0) {
   if (E.state[i] === 3) dmg *= 2;   // 撞晕的提伯尔特挨打加倍
@@ -1063,7 +1064,7 @@ ui.innerHTML = `
 <div id="calm" class="hide"><b>朱丽叶的安稳</b><div class="bossbar"><i></i></div></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
 <div id="dlg" class="hide" data-ui><div class="cg hide"><img alt=""></div><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
-<div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
+<div id="cards" class="hide" data-ui><h2></h2><div class="row"></div><button class="reroll hide"></button></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
 <div id="title" class="hide" data-ui><div class="tbg"><img alt="" src="assets/cg/key-rj.jpg"></div>
  <div class="thead"><h1>莎士比亚的两场戏</h1><p class="sub">用一首情歌，改写莎士比亚的结局</p></div>
@@ -1180,29 +1181,51 @@ async function playScene(lines) {
 
 // 三选一：升级时，或者幕间"对话里选回答"
 // 卡片出来后 0.6 秒内点不了（10-31 用户说"一不小心连升两级"：连着两次升级时，第二组卡片刚出来就被手指点上了）
-let cardLock = 0;
-function chooseCards(title, isChoice) {
+let cardLock = 0, rerolls = 1;
+const actPhase = () => (actTime < ACT_LEN * 0.45 ? 'early' : 'late');   // 每幕前半段怪少而硬，后半段怪潮
+// custom：直接给的卡（进化卡、命运卡）；不给就按等级抽。卡上写：唱法还是心情、现在推荐、进化配方
+function chooseCards(title, isChoice, custom) {
   cardLock = Date.now() + (AUTO ? 0 : 650);
   return new Promise((resolve) => {
-    const cards = drawCards(levels, level), el = $('#cards'), row = el.querySelector('.row');
-    if (!cards.length) { resolve(); return; }
-    el.querySelector('h2').textContent = title;
-    el.classList.toggle('choice', !!isChoice);
-    row.innerHTML = '';
-    cards.forEach((k, idx) => {
-      const lv = levels[k.id] || 0;
-      const b = document.createElement('button');
-      b.innerHTML = isChoice
-        ? `<q>${LOVE[k.id]}</q><b>${k.name}</b><small>${k.desc[lv]}</small>`
-        : `<b>${k.name}</b><em>${lv ? `${lv} 级 → ${lv + 1} 级` : '新技能'}</em><small>${k.desc[lv]}</small><q>${LOVE[k.id]}</q>`;
-      b.onclick = () => { if (Date.now() < cardLock) return; cardLock = Date.now() + 1e9; show(el, false); takeSkill(k.id); if (isChoice) recordChoice(title, LOVE[k.id], k.name); resolve(k.id); };
-      row.appendChild(b);
-      if (AUTO && idx === 0) setTimeout(() => b.click(), 60);
-    });
+    const el = $('#cards'), row = el.querySelector('.row');
+    const render = () => {
+      const cards = custom || drawCards(levels, level, Math.random, actPhase());
+      if (!cards.length) { show(el, false); resolve(); return; }
+      el.querySelector('h2').textContent = title;
+      el.classList.toggle('choice', !!isChoice);
+      row.innerHTML = '';
+      const ph = actPhase();
+      cards.forEach((k, idx) => {
+        const lv = levels[k.id] || 0, b = document.createElement('button');
+        if (k.evo) { b.className = 'evo'; b.innerHTML = `<i class="tag">进化</i><b>${k.name}</b><small>${k.desc}</small><q>两首歌合成了一首新歌。</q>`; }
+        else if (k.fate) { b.className = 'fate'; b.innerHTML = `<i class="tag">命运卡</i><b>${k.name}</b><small>${k.desc}</small><q>${k.quote}</q>`; }
+        else {
+          const kind = k.kind === 'song' ? '唱法' : '心情', rec = k.tag === (ph === 'early' ? 'single' : 'crowd') ? `<i class="rec">${ph === 'early' ? '怪少的时候最划算' : '怪潮来了最划算'}</i>` : '';
+          const recipe = k.evo ? `<i class="recipe">练满 + ${byId[k.with].name} → ${EVOS[k.evo].name}</i>` : '';
+          b.className = k.kind;
+          b.innerHTML = isChoice
+            ? `<q>${LOVE[k.id] || ''}</q><b>${k.name}</b><small>${k.desc[lv]}</small>`
+            : `<i class="tag">${kind}</i>${rec}<b>${k.name}</b><em>${lv ? `${lv} 级 → ${lv + 1} 级` : '新的'}</em><small>${k.desc[lv]}</small>${recipe}<q>${LOVE[k.id] || ''}</q>`;
+        }
+        b.onclick = () => {
+          if (Date.now() < cardLock) return; cardLock = Date.now() + 1e9; show(el, false);
+          if (k.fate) applyFate(k); else takeSkill(k.id);
+          if (isChoice) recordChoice(title, LOVE[k.id], k.name); resolve(k.id);
+        };
+        row.appendChild(b);
+        if (AUTO && idx === 0) setTimeout(() => b.click(), 60);
+      });
+      const rr = el.querySelector('.reroll');
+      rr.classList.toggle('hide', !!custom || isChoice || rerolls <= 0);
+      rr.textContent = `换一组（这一幕还能换 ${rerolls} 次）`;
+      rr.onclick = (e) => { e.stopPropagation(); if (rerolls <= 0) return; rerolls--; cardLock = Date.now() + 300; render(); };
+    };
+    render();
     show(el);
   });
 }
 function takeSkill(id) {
+  if (EVOS[id]) { stats.evo[id] = true; sfxLevel(); cheer(1000); return; }   // 进化
   levels[id] = (levels[id] || 0) + 1;
   byId[id].apply(stats, levels[id]);
   if (stats.healNow) { player.hp = Math.min(maxHp(), player.hp + maxHp() * stats.healNow); stats.healNow = 0; }
@@ -1262,7 +1285,7 @@ async function startStory(story, from, again) {
     await waitRest(); beginAct(from); return;
   }
   if (START_ACT > 1 && !again) {   // 测试用：直接从后面的幕开始，先送几级
-    for (const id of ['chord', 'presto', 'sustain', 'chord']) { takeSkill(id); level++; }
+    for (const id of ['love', 'forte', 'presto', 'love']) { takeSkill(id); level++; }
     if (START_ACT === 5) { await waitRest(); beginAct(5); return; }
   } else if (!again) await playScene(SCENES.prologue);
   await waitRest(); beginAct(again ? 1 : START_ACT);
@@ -1270,7 +1293,7 @@ async function startStory(story, from, again) {
 const startRun = (again) => startStory('rj', 1, again);
 // 直接从后面的幕开始、又没有存档时，送的技能和等级（大约是正常打到那一幕的水平）
 function giveBuild(n) {
-  const picks = { 2: ['chord', 'presto', 'sustain'], 3: ['chord', 'presto', 'sustain', 'forte', 'chord'], 4: ['chord', 'presto', 'sustain', 'forte', 'chord', 'orbit', 'hymn'] }[n] || [];
+  const picks = { 2: ['love', 'forte', 'presto'], 3: ['love', 'forte', 'presto', 'echo', 'love'], 4: ['love', 'forte', 'presto', 'echo', 'love', 'orbit', 'hymn'] }[n] || [];
   for (const id of picks) { takeSkill(id); level++; }
 }
 function beginAct(n, retry) {
@@ -1284,7 +1307,8 @@ function beginAct(n, retry) {
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.15);   // 每一幕开头只回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
-  clearChests(); eliteT = 0; casting = 0; player.conf = 0; shakeIdx = 0; inkT = 0; trailReset();
+  clearChests(); clearBreakables(); eliteT = 0; casting = 0; player.conf = 0; shakeIdx = 0; inkT = 0; trailReset(); CO.n = 0; rerolls = 1; fate = { ...FATE0 }; dda = 1;
+  if (!retry) setTimeout(chooseFate, 1600);
   if (!retry) for (let k = F.n; k < save.perm.fans * 2; k++) addFan(k % 2 ? T.drum : T.lute);   // 后台买的：开场就带几个伴舞
   dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
   if (juliet) { juliet.visible = false; layJuliet(false); }
@@ -1316,7 +1340,7 @@ function layJuliet(lying) {
 }
 function earnRoses(n, why) {
   n = Math.round(n); if (n <= 0) return 0;
-  save.roses += n; runRoses += n; persist(); return n;
+  n = Math.round(n * (fate.roses || 1)); save.roses += n; runRoses += n; persist(); return n;
 }
 async function endAct(good) {
   phase = 'actEnd';
@@ -1482,7 +1506,8 @@ function step(dt) {
   }
 
   director(dt);
-  if (fighting) { stepElites(dt); stepShakespeare(dt); stepHazards(dt); stepFans(dt); if (phase !== 'fight') return; }
+  if (fighting) { stepElites(dt); stepShakespeare(dt); stepHazards(dt); stepFans(dt); stepDDA(dt); stepBreakables(dt); if (phase !== 'fight') return; }
+  stepCorpses(dt); stepQuills(dt);
   stepChests();
 
   // 怪：朝主角走，互相推开，绕开障碍物
@@ -1527,7 +1552,7 @@ function step(dt) {
         if (ox === E.x[i] && oz === E.z[i]) E.state[i] = 0;
         continue;
       } else if (st === 3) { E.st[i] -= dt; if (E.st[i] <= 0) E.state[i] = 0; continue; }   // 晕：站着不动，挨打加倍
-      else if (E.sk[i] <= 0 && E.wind[i] <= 0) castSkill(i, t, d, dx, dz);
+      else if (E.sk[i] <= 0 && E.wind[i] <= 0 && (E.elite[i] || t.boss)) castSkill(i, t, d, dx, dz);   // 弹幕天堂：小怪只会走过来，精英和 Boss 才放技能
       if (E.state[i] === 1) sp = 0;
     }
     // 10-31 用户说小怪"自动攻击、必中、躲不掉"：改成先蓄力（变红、停下、鼓起来）再扑，蓄力时走开就打不中
@@ -1536,7 +1561,7 @@ function step(dt) {
       if (E.wind[i] <= 0) {
         E.atk[i] = t.boss ? 1.1 : 1.3;
         if (fighting && d < touch + (t.boss ? 0.9 : 0.5) && player.hurtCd <= 0 && !GOD) {
-          player.hp -= t.dmg * early; player.hurtCd = 0.45; sfxHurt();
+          player.hp -= t.dmg * early * ddaDmg(); player.hurtCd = 0.6; sfxHurt();
           if (player.hp <= 0) { player.hp = 0; die(); return; }
         }
       }
@@ -1576,28 +1601,25 @@ function step(dt) {
 
   if (!fighting) { stepFx(dt); return; }
 
-  // 瞄准：右摇杆 > 鼠标 > 自动打最近的怪
-  let aim = null;
-  if (input.aim.active) { const d = Math.hypot(input.aim.x, input.aim.y); aim = { x: input.aim.x / d, z: input.aim.y / d }; }
-  else if (input.mouse.active) aim = mouseAim();
-  if (!aim) { let t = nearestEnemy(player.x, player.z, 15);
-    const bi = dogSpawned && !dogDown ? bossIndex() : -1;   // Boss 在 11 米内时，自动瞄准先打 Boss
-    if (act === 4) { let bd = 1e9; for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].ghost) { const q = E.x[i] * E.x[i] + E.z[i] * E.z[i]; const pd = Math.hypot(E.x[i] - player.x, E.z[i] - player.z); if (q < 36 && pd < 12 && q < bd) { bd = q; t = i; } } }   // 第四幕：先打离朱丽叶最近的亡魂
-    if (bi >= 0 && Math.hypot(E.x[bi] - player.x, E.z[bi] - player.z) < 11) t = bi;
-    if (t >= 0) { const dx = E.x[t] - player.x, dz = E.z[t] - player.z, d = Math.hypot(dx, dz) || 1; aim = { x: dx / d, z: dz / d }; } }
-  if (aim) { player.aimX = aim.x; player.aimZ = aim.z; }
+  // 瞄准（10-31 第 55 轮）：朝走路的方向唱，停下来就朝最后走的方向；音符会拐弯追上前面的怪（shoot 里找目标、飞的时候转向）
+  const aim = { x: player.mvx, z: player.mvz };
+  { const d = Math.hypot(aim.x, aim.z) || 1; aim.x /= d; aim.z /= d; }
+  player.aimX = aim.x; player.aimZ = aim.z;
 
   // 开火
   fireCd -= dt;
   if (aim && fireCd <= 0) {
-    fireCd = 1 / (3.4 * stats.rateMul);
+    fireCd = 1 / (3.4 * stats.rateMul * fate.rate);
     const base = Math.atan2(player.aimX, player.aimZ), spread = 0.17;
     const fan = (ang, n) => { for (let k = 0; k < n; k++) shoot(ang + (k - (n - 1) / 2) * spread); };
     const b0 = B.n;
     fan(base, stats.projectiles);
-    const en = stats.echo >= 3 ? Math.min(3, stats.projectiles) : 1;
-    if (stats.echo >= 1) fan(base + Math.PI, en);
-    if (stats.echo >= 2) { fan(base + Math.PI / 2, en); fan(base - Math.PI / 2, en); }
+    const en = stats.echo >= 3 ? 2 : 1;
+    if (stats.evo.choir) for (let k = 1; k < 8; k++) fan(base + k * Math.PI / 4, en);   // 合唱团：八个方向
+    else {
+      if (stats.echo >= 1) fan(base + Math.PI, en);
+      if (stats.echo >= 2) { fan(base + Math.PI / 2, en); fan(base - Math.PI / 2, en); }
+    }
     pluck(MELODY[noteIdx++ % MELODY.length], 0.035, 0.3);
     // 踩在背景音乐的拍子上唱出去的音符：大一号、伤害 ×1.6，偶尔跳一个"完美！"
     const bp = beatPhase();
@@ -1609,8 +1631,18 @@ function step(dt) {
 
   // 音符飞行、打中怪
   for (let i = B.n - 1; i >= 0; i--) {
+    if (B.tgt[i] >= 0) {   // 拐弯追目标
+      const j = idxOf(B.tgt[i]);
+      if (j < 0) B.tgt[i] = -1;
+      else {
+        const v = Math.hypot(B.dx[i], B.dz[i]) || 1, tx = E.x[j] - B.x[i], tz = E.z[j] - B.z[i], td = Math.hypot(tx, tz) || 1, k = Math.min(1, dt * 14);
+        const nx = B.dx[i] / v * (1 - k) + tx / td * k, nz = B.dz[i] / v * (1 - k) + tz / td * k, nd = Math.hypot(nx, nz) || 1;
+        B.dx[i] = nx / nd * v; B.dz[i] = nz / nd * v;
+      }
+    }
     B.x[i] += B.dx[i] * dt; B.z[i] += B.dz[i] * dt; B.life[i] -= dt;
     if (B.life[i] <= 0) { removeBullet(i); continue; }
+    if (hitBreakable(B.x[i], B.z[i], B.dmg[i])) { removeBullet(i); continue; }
     const hr = 0.35 * B.size[i];
     let hit = -1;
     forNear(B.x[i], B.z[i], 1.2 + hr, (j) => {
@@ -1626,7 +1658,7 @@ function step(dt) {
     if (B.bounce[i] > 0) {
       B.bounce[i]--;
       const nx = nearestEnemy(hx, hz, 7, hid);
-      if (nx >= 0) { const dx = E.x[nx] - hx, dz = E.z[nx] - hz, d = Math.hypot(dx, dz) || 1; B.dx[i] = dx / d * v; B.dz[i] = dz / d * v; B.x[i] = hx; B.z[i] = hz; B.life[i] = Math.max(B.life[i], 0.5); continue; }
+      if (nx >= 0) { const dx = E.x[nx] - hx, dz = E.z[nx] - hz, d = Math.hypot(dx, dz) || 1; B.dx[i] = dx / d * v; B.dz[i] = dz / d * v; B.x[i] = hx; B.z[i] = hz; B.life[i] = Math.max(B.life[i], 0.5); B.tgt[i] = E.id[nx]; continue; }
     }
     if (B.pierce[i] > 0) { B.pierce[i]--; continue; }
     removeBullet(i);
@@ -1635,16 +1667,30 @@ function step(dt) {
   // 低音鼓：每隔几秒震开一圈
   if (stats.drum) {
     drumCd -= dt;
-    if (drumCd <= 0) { drumCd = [0, 4, 3.3, 2.6][stats.drum]; shockwave([0, 4, 5, 6][stats.drum], 2); }
+    if (drumCd <= 0) {
+      const hb = stats.evo.heartbeat;
+      drumCd = hb ? 1.8 : [0, 4, 3.3, 2.6][stats.drum]; shockwave((hb ? 7.5 : [0, 4, 5, 6][stats.drum]) * stats.area, 2 * stats.dmgMul);
+      if (hb) player.hp = Math.min(maxHp(), player.hp + 2);   // 心跳鼓：每次回 2 点血
+    }
   }
+  // 抛玫瑰：朝怪群扔玫瑰，落地炸开（3D 的抛物线）
+  if (stats.rose) {
+    roseCd -= dt;
+    if (roseCd <= 0) {
+      roseCd = 2.4;
+      const n = stats.evo.petals ? 6 : [0, 1, 2, 3][stats.rose];
+      for (let k = 0; k < n; k++) { const j = E.n ? Math.floor(Math.random() * E.n) : -1; if (j < 0) break; const d = Math.hypot(E.x[j] - player.x, E.z[j] - player.z); if (d > 12) continue; throwRose(E.x[j], E.z[j], (stats.rose >= 3 || stats.evo.petals ? 2.8 : 2.2) * stats.area); }
+    }
+  }
+  stepRoses(dt);
   // 环绕声：音符绕着主角转
-  const on = [0, 2, 3, 4][stats.orbit] || 0;
+  const wr = stats.evo.wreath, on = wr ? 6 : [0, 2, 3, 4][stats.orbit] || 0, orR = (wr ? 3.2 : 2.3) * Math.sqrt(stats.area);
   for (let k = 0; k < on; k++) {
-    const a = time * (stats.orbit >= 3 ? 3.6 : 2.6) + k / on * Math.PI * 2, ox = player.x + Math.sin(a) * 2.3, oz = player.z + Math.cos(a) * 2.3;
+    const a = time * (stats.orbit >= 3 ? 3.6 : 2.6) + k / on * Math.PI * 2, ox = player.x + Math.sin(a) * orR, oz = player.z + Math.cos(a) * orR;
     forNear(ox, oz, 1.4, (j) => {
       if (E.ocd[j] > 0) return;
       const R = TYPES[E.type[j]].r + 0.4, ex = E.x[j] - ox, ez = E.z[j] - oz;
-      if (ex * ex + ez * ez < R * R) { E.ocd[j] = 0.4; hurtEnemy(j, stats.dmgMul, ex * 0.3, ez * 0.3); return false; }
+      if (ex * ex + ez * ez < R * R) { E.ocd[j] = 0.4; hurtEnemy(j, stats.dmgMul * (wr ? 2 : 1), ex * 0.3, ez * 0.3); return false; }
     });
   }
 
@@ -1652,22 +1698,31 @@ function step(dt) {
   let crowd = 0;
   forNear(player.x, player.z, 4, (j) => { const dx = E.x[j] - player.x, dz = E.z[j] - player.z; if (dx * dx + dz * dz < 16) crowd++; });
   const boost = player.hp < maxHp() * 0.35 || crowd >= 25 ? 2 : 1;   // 绝境加速
-  stepOrbs(dt, 1.7 + save.perm.reach * 0.5, boost);   // 10-31 用户要"掉在怪倒下的地方，走过去捡"：萤火留在原地，走到 1.7 米内才飞过来（"轻快"技能捡得远一点）
+  stepOrbs(dt, magnetT > 0 ? 99 : 1.7 + save.perm.reach * 0.5 + stats.reach, boost); if (magnetT > 0) magnetT -= dt;   // 10-31 用户要"掉在怪倒下的地方，走过去捡"：萤火留在原地，走到 1.7 米内才飞过来（"轻快"技能捡得远一点）
   stepFx(dt);
   if (pendingLevels > 0 && phase === 'fight') openLevelUp();
 }
 function shoot(ang) {
   if (B.n >= MAX_B) return;
-  const i = B.n++, sp = 15;
+  const i = B.n++, sp = 15, aria = stats.evo.aria;
   B.x[i] = player.x + Math.sin(ang) * 0.5; B.z[i] = player.z + Math.cos(ang) * 0.5;
-  B.dx[i] = Math.sin(ang) * sp; B.dz[i] = Math.cos(ang) * sp; B.life[i] = 1.05;
-  B.dmg[i] = stats.dmgMul; B.pierce[i] = stats.pierce; B.bounce[i] = stats.bounce; B.size[i] = stats.size; B.last[i] = -1;
+  B.dx[i] = Math.sin(ang) * sp; B.dz[i] = Math.cos(ang) * sp; B.life[i] = 1.1;
+  B.dmg[i] = stats.dmgMul * fate.dmg * (aria ? 1.6 : 1); B.pierce[i] = aria ? 99 : stats.pierce; B.bounce[i] = stats.evo.lightning ? 7 : stats.bounce;
+  B.size[i] = stats.size * (aria ? 2 : 1); B.last[i] = -1;
+  B.tgt[i] = coneTarget(B.x[i], B.z[i], ang, 14, 0.95);   // 前方约 110 度、13 米内最近的怪：音符会拐弯追它，基本必中
 }
+// 前方扇形里最近的怪（返回怪的编号 id，没有就 -1）
+function coneTarget(x, z, ang, R, half) {
+  const ux = Math.sin(ang), uz = Math.cos(ang), c = Math.cos(half); let best = -1, bd = R * R;
+  for (let i = 0; i < E.n; i++) { const dx = E.x[i] - x, dz = E.z[i] - z, d2 = dx * dx + dz * dz; if (d2 > bd || d2 < 1e-4) continue; if ((dx * ux + dz * uz) / Math.sqrt(d2) < c) continue; bd = d2; best = i; }
+  return best >= 0 ? E.id[best] : -1;
+}
+const idxOf = (id) => { for (let i = 0; i < E.n; i++) if (E.id[i] === id) return i; return -1; };
 function shootFrom(x, z, ang, dmg) {
   if (B.n >= MAX_B) return;
   const i = B.n++, sp = 12;
   B.x[i] = x; B.z[i] = z; B.dx[i] = Math.sin(ang) * sp; B.dz[i] = Math.cos(ang) * sp; B.life[i] = 0.9;
-  B.dmg[i] = dmg; B.pierce[i] = 0; B.bounce[i] = 0; B.size[i] = 0.7; B.last[i] = -1;
+  B.dmg[i] = dmg; B.pierce[i] = 0; B.bounce[i] = 0; B.size[i] = 0.7; B.last[i] = -1; B.tgt[i] = -1;
 }
 function shockwave(R, dmg) {
   ring(player.x, player.z, R);
@@ -1684,12 +1739,12 @@ function stepOrbs(dt, magnet, boost) {
   for (let i = O.n - 1; i >= 0; i--) {
     O.t[i] += dt;
     const dx = player.x - O.x[i], dz = player.z - O.z[i], d = Math.hypot(dx, dz);
-    const pull = phase === 'actEnd' ? 99 : magnet * (1 + (levels.stride || 0) * 0.4);
+    const pull = phase === 'actEnd' ? 99 : magnet;
     if (d < 0.6) {
       xp += O.v[i] * boost; O.n--; sfxPick();
       for (const a of [O.x, O.z, O.v, O.t]) a[i] = a[O.n];
       while (xp >= xpNeed(level)) { xp -= xpNeed(level); level++; pendingLevels++; }
-    } else if (d < pull) { const s = (phase === 'actEnd' ? 18 : 6 + 9 * (1 - d / pull)) * dt; O.x[i] += dx / d * s; O.z[i] += dz / d * s; }
+    } else if (d < pull) { const s = (phase === 'actEnd' || pull > 50 ? 20 : 6 + 9 * (1 - d / pull)) * dt; O.x[i] += dx / d * s; O.z[i] += dz / d * s; }
   }
 }
 function stepFx(dt) {
@@ -1828,8 +1883,10 @@ function clearChests() { for (const c of CH) scene.remove(c.m); CH.length = 0; H
 async function openChest() {   // 宝箱：挑一首歌，直接升两级
   phase = 'levelup'; sfxLevel(); shake = Math.max(shake, 0.4);
   await sleep(AUTO ? 10 : 250);
+  const ev = evoReady(levels, stats.evo);
+  if (ev.length) { await chooseCards('宝箱里是进化！选一个', false, ev.map((e) => ({ ...e, evo: true }))); if (phase === 'levelup') phase = 'fight'; return; }
   const id = await chooseCards('打开宝箱！挑一首歌，直接升两级', false);
-  if (id && (levels[id] || 0) < byId[id].max) takeSkill(id);
+  if (id && byId[id] && (levels[id] || 0) < byId[id].max) takeSkill(id);
   if (phase === 'levelup') phase = 'fight';
 }
 // 莎士比亚的鬼魂：打的时候时不时跳出来抗议，第二幕起往场上泼墨水（红圈，躲开）
@@ -1848,7 +1905,7 @@ function stepShakespeare(dt) {
     inkT += dt;
     if (inkT > 15) {
       inkT = 0;
-      for (let j = 0; j < 3; j++) { const a = Math.random() * Math.PI * 2, r = j === 0 ? 0 : 2.2 + Math.random() * 1.5; hazard(0, player.x + Math.sin(a) * r, player.z + Math.cos(a) * r, 1.7, 1.15, 9); }
+      for (let j = 0; j < 3; j++) { const a = Math.random() * Math.PI * 2, r = j === 0 ? 0 : 2.2 + Math.random() * 1.5, hx = player.x + Math.sin(a) * r, hz = player.z + Math.cos(a) * r; hazard(0, hx, hz, 1.7, 1.3, 9); dropQuill(hx, hz, 1.3); }
       floatText(player.x, player.z, '莎士比亚泼墨水！');
       if (!inkSaid) { inkSaid = true; bark('shakespeare', '墨水！给我改回去！'); }
     }
@@ -1857,11 +1914,183 @@ function stepShakespeare(dt) {
 let eliteT = 0;
 function stepElites(dt) {   // 每 22 秒来一只精英怪（这一幕的普通怪，血多 6 倍、个头大、金色、头上有冠），打倒掉宝箱
   eliteT += dt;
-  if (eliteT < 22 || E.n >= MAX_E) return;
+  if (eliteT < 22 / fate.elite || E.n >= MAX_E) return;
   eliteT = 0;
   const ty = act === 4 ? T.shade : act === 5 ? (Math.random() < 0.5 ? T.drum : T.lute) : act === 1 ? T.lute : T.drum;
-  spawnEnemy(ty); const i = E.n - 1; E.elite[i] = 1; E.hp[i] *= 6; E.speed[i] *= 0.8;
+  spawnEnemy(ty); const i = E.n - 1; E.elite[i] = 1; E.hp[i] *= 6; E.maxhp[i] = E.hp[i]; E.speed[i] *= 0.8;
   bark('romeo', '金色的那个……打倒它有好东西！');
+}
+
+// ---------- 莎士比亚的命运卡：每一幕开场三选一，改这一幕的规则（有好处也有代价） ----------
+const FATE0 = { fan: 1, espd: 1, dmg: 1, rate: 1, count: 1, xp: 1, roses: 1, elite: 1 };
+let fate = { ...FATE0 };
+const FATES = [
+  { id: 'f-dance', name: '群舞', desc: '伴舞的机会 ×2，但怪走得快 25%', quote: '要跳就大家一起跳！', mod: { fan: 2, espd: 1.25 } },
+  { id: 'f-solo', name: '独唱', desc: '伤害 +45%，这一幕没有伴舞', quote: '这一段，只听你一个人唱。', mod: { dmg: 1.45, fan: 0 } },
+  { id: 'f-presto', name: '急板', desc: '唱得快 30%，怪多 30%', quote: '快一点！再快一点！', mod: { rate: 1.3, count: 1.3 } },
+  { id: 'f-lento', name: '慢板', desc: '怪慢 25%，萤火少 20%', quote: '慢慢来，悲剧不着急。', mod: { espd: 0.75, xp: 0.8 } },
+  { id: 'f-tragic', name: '苦情戏', desc: '先掉三成血，这一幕观众的玫瑰 ×2', quote: '观众最爱看你受苦。', mod: { roses: 2 }, hurt: 0.3 },
+  { id: 'f-comedy', name: '喜剧', desc: '金色精英怪来得快一倍（宝箱多一倍）', quote: '这不是悲剧吗？怎么全是宝箱？', mod: { elite: 2 } },
+  { id: 'f-encore', name: '返场', desc: '萤火多 35%，但怪更耐打一点', quote: '观众要求加演！', mod: { xp: 1.35 }, tough: 1.25 },
+];
+function applyFate(k) {
+  fate = { ...FATE0, ...k.mod, tough: k.tough || 1 };
+  if (k.hurt) player.hp = Math.max(1, player.hp * (1 - k.hurt));
+  bark('shakespeare', `${k.name}。${k.quote}`);
+}
+async function chooseFate() {
+  if (phase !== 'fight' || AUTO) return;
+  phase = 'levelup';
+  const pool = FATES.slice(), picks = [];
+  while (picks.length < 3) picks.push({ ...pool.splice(Math.floor(Math.random() * pool.length), 1)[0], fate: true });
+  await chooseCards('莎士比亚发来三张命运卡：这一幕按哪张演？', false, picks);
+  if (phase === 'levelup') phase = 'fight';
+}
+// 自动调难度：玩家看不到。血一直多就多出怪，血少就少出怪、怪打得轻（10-31 用户要"卡在一个区间"）
+let dda = 1, ddaT = 0;
+function stepDDA(dt) {
+  ddaT += dt; if (ddaT < 1) return; ddaT = 0;
+  const r = player.hp / maxHp();
+  if (r > 0.7) dda = Math.min(1.4, dda + 0.025); else if (r < 0.35) dda = Math.max(0.55, dda - 0.07); else dda += (1 - dda) * 0.03;
+}
+const ddaK = () => dda * fate.count * (lowHp() ? 0.85 : 1);
+const ddaDmg = () => 0.65 + 0.35 * dda;
+
+// ---------- 可以打碎的烛台、木桶、花瓶：打碎了掉面包（回血）、情书（全场的萤火飞过来）、鲁特琴（全场大合唱） ----------
+const BR = [], PK = [];
+const brMats = { wood: new THREE.MeshLambertMaterial({ color: 0x9a6232 }), gold: new THREE.MeshLambertMaterial({ color: 0xe0b050, emissive: 0x402800 }), vase: new THREE.MeshLambertMaterial({ color: 0x5a7fc0, emissive: 0x0a1020 }) };
+function makeBreakable(kind) {
+  const g = new THREE.Group();
+  if (kind === 0) {   // 烛台
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.12, 10), brMats.gold), new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.0, 6).translate(0, 0.55, 0), brMats.gold));
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7).rotateX(-PITCH), MAT.glow); fl.position.y = 1.15; g.add(fl);
+  } else if (kind === 1) {   // 木桶
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.9, 12).translate(0, 0.45, 0), brMats.wood));
+    g.add(new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.035, 4, 16).rotateX(Math.PI / 2).translate(0, 0.25, 0), brMats.gold), new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.035, 4, 16).rotateX(Math.PI / 2).translate(0, 0.65, 0), brMats.gold));
+  } else {   // 花瓶
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8).scale(1, 1.3, 1).translate(0, 0.42, 0), brMats.vase), new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.25, 10).translate(0, 0.9, 0), brMats.vase));
+  }
+  g.traverse((o) => { if (o.isMesh && o.material !== MAT.glow) o.castShadow = true; });
+  return g;
+}
+let brT = 0;
+function stepBreakables(dt) {
+  brT += dt;
+  if (brT > 9 && BR.length < 4) {   // 每 9 秒在主角附近（画面边上）放一个
+    brT = 0;
+    const a = Math.random() * Math.PI * 2, d = 7 + Math.random() * 4, p = { x: player.x + Math.sin(a) * d, z: player.z + Math.cos(a) * d };
+    pushOut(p, 0.6);
+    const m = makeBreakable(act === 5 ? 1 : act === 1 ? 0 : Math.floor(Math.random() * 3)); m.position.set(p.x, 0, p.z); scene.add(m);
+    BR.push({ m, x: p.x, z: p.z, hp: 3 });
+  }
+  for (let k = BR.length - 1; k >= 0; k--) if (Math.hypot(BR[k].x - player.x, BR[k].z - player.z) > 40) { scene.remove(BR[k].m); BR.splice(k, 1); }
+  for (let k = PK.length - 1; k >= 0; k--) {
+    const pk = PK[k]; pk.m.position.y = 0.6 + Math.sin(time * 4 + k) * 0.12;
+    if (Math.hypot(pk.x - player.x, pk.z - player.z) < 1.2) { scene.remove(pk.m); PK.splice(k, 1); usePickup(pk.kind, pk.x, pk.z); }
+  }
+}
+function hitBreakable(x, z, dmg) {
+  for (let k = BR.length - 1; k >= 0; k--) {
+    const b = BR[k]; if ((x - b.x) ** 2 + (z - b.z) ** 2 > 0.55) continue;
+    b.hp -= dmg; b.m.scale.setScalar(1.15); setTimeout(() => b.m.scale.setScalar(1), 80);
+    if (b.hp <= 0) { scene.remove(b.m); BR.splice(k, 1); ring(b.x, b.z, 1.4, 0.3); sfxBonk(); const r = Math.random(); dropPickup(b.x, b.z, r < 0.55 ? 0 : r < 0.82 ? 1 : 2); }
+    return true;
+  }
+  return false;
+}
+const PK_TEX = ['🍞', '💌', '🪕'].map((ch) => canvasTex(96, (g, s) => { g.font = `${s * 0.72}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowColor = '#fff2c0'; g.shadowBlur = 14; g.fillText(ch, s / 2, s / 2 + 4); }));
+function dropPickup(x, z, kind) {
+  const m = new THREE.Mesh(billboardGeo(0.9, 0.9, true), new THREE.MeshBasicMaterial({ map: PK_TEX[kind], transparent: true, depthWrite: false }));
+  m.position.set(x, 0.6, z); scene.add(m); PK.push({ m, x, z, kind });
+  floatText(x, z, ['面包！', '情书！', '鲁特琴！'][kind]);
+}
+function usePickup(kind, x, z) {
+  if (kind === 0) { player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.3); floatText(x, z, '回血 +30%'); tone(nt(12), { dur: 0.3, vol: 0.05, type: 'triangle' }); }
+  else if (kind === 1) { magnetT = 2.5; floatText(x, z, '全场的萤火都飞过来了！'); sfxLevel(); }
+  else { shockwave(15, 6 * stats.dmgMul); shake = Math.max(shake, 1); floatText(x, z, '全场大合唱！'); cheer(999); }
+}
+function clearBreakables() { for (const b of BR) scene.remove(b.m); for (const p of PK) scene.remove(p.m); BR.length = PK.length = 0; brT = 0; }
+
+// 抛玫瑰：沿 3D 抛物线飞过去，落地炸开一圈
+const ROSES = [];
+const roseTex = canvasTex(64, (g, s) => { g.font = `${s * 0.8}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🌹', s / 2, s / 2 + 3); });
+function throwRose(tx, tz, R) {
+  const m = new THREE.Mesh(billboardGeo(0.8, 0.8, true), new THREE.MeshBasicMaterial({ map: roseTex, transparent: true, depthWrite: false }));
+  scene.add(m); ROSES.push({ m, x0: player.x, z0: player.z, tx, tz, t: 0, R });
+}
+function stepRoses(dt) {
+  for (let k = ROSES.length - 1; k >= 0; k--) {
+    const r = ROSES[k]; r.t += dt / 0.6; const f = Math.min(1, r.t);
+    r.m.position.set(r.x0 + (r.tx - r.x0) * f, 1 + Math.sin(f * Math.PI) * 4, r.z0 + (r.tz - r.z0) * f); r.m.rotation.z = f * 9;
+    if (f >= 1) {
+      scene.remove(r.m); ROSES.splice(k, 1); ring(r.tx, r.tz, r.R, 0.4);
+      for (let i = E.n - 1; i >= 0; i--) { const dx = E.x[i] - r.tx, dz = E.z[i] - r.tz; if (dx * dx + dz * dz < r.R * r.R) hurtEnemy(i, 3 * stats.dmgMul * fate.dmg, dx * 0.4, dz * 0.4); }
+    }
+  }
+}
+
+// 被打动的怪不是直接消失：被唱得飞上天，转着圈，落下之前变成一颗心（3D 才有的爽）
+const MAX_C = 120;
+const CO = { n: 0, ty: new Uint8Array(MAX_C), x: new Float32Array(MAX_C), y: new Float32Array(MAX_C), z: new Float32Array(MAX_C), vx: new Float32Array(MAX_C), vy: new Float32Array(MAX_C), vz: new Float32Array(MAX_C), sp: new Float32Array(MAX_C), t: new Float32Array(MAX_C) };
+function launchCorpse(i, t) {
+  if (CO.n >= MAX_C || !monFrames[E.type[i]] || t.boss) return;
+  const k = CO.n++, dx = E.x[i] - player.x, dz = E.z[i] - player.z, d = Math.hypot(dx, dz) || 1;
+  CO.ty[k] = E.type[i]; CO.x[k] = E.x[i]; CO.y[k] = 0; CO.z[k] = E.z[i];
+  CO.vx[k] = dx / d * (2 + Math.random() * 3); CO.vz[k] = dz / d * (2 + Math.random() * 3); CO.vy[k] = 7 + Math.random() * 4; CO.sp[k] = (Math.random() - 0.5) * 20; CO.t[k] = 0;
+}
+const qC = new THREE.Quaternion(), eC = new THREE.Euler(), mC = new THREE.Matrix4(), pC = new THREE.Vector3(), sC = new THREE.Vector3();
+function stepCorpses(dt) {
+  for (let k = CO.n - 1; k >= 0; k--) {
+    CO.t[k] += dt; CO.vy[k] -= 22 * dt; CO.x[k] += CO.vx[k] * dt; CO.y[k] += CO.vy[k] * dt; CO.z[k] += CO.vz[k] * dt;
+    if (CO.t[k] > 0.9 || CO.y[k] < -0.5) { if (CO.t[k] > 0.9) ring(CO.x[k], CO.z[k], 0.5, 0.25); CO.n--; for (const a of [CO.ty, CO.x, CO.y, CO.z, CO.vx, CO.vy, CO.vz, CO.sp, CO.t]) a[k] = a[CO.n]; }
+  }
+}
+function drawCorpses() {   // 画在怪的实例化网格里（第 0 帧姿势），整个身子打转、越飞越小
+  for (let k = 0; k < CO.n; k++) {
+    const mf = monFrames[CO.ty[k]]; if (!mf) continue;
+    const fm = mf.meshes[0], key = CO.ty[k] * 8, k2 = fcounts[key]++;
+    const sc = 1 - CO.t[k] * 0.6;
+    eC.set(CO.t[k] * CO.sp[k], CO.t[k] * 6, CO.t[k] * CO.sp[k] * 0.7); qC.setFromEuler(eC);
+    mC.compose(pC.set(CO.x[k], CO.y[k], CO.z[k]), qC, sC.set(sc, sc, sc)); mC.toArray(fm.instanceMatrix.array, k2 * 16);
+    const col = fm.instanceColor.array; col[k2 * 3] = 2.2; col[k2 * 3 + 1] = 1.6; col[k2 * 3 + 2] = 1.9;
+  }
+}
+
+// 怪的血条：被打过才显示（精英怪一直显示，金色）
+const hpBg = flatInst(billboardGeo(1, 1, true), new THREE.MeshBasicMaterial({ color: 0x1a1016, transparent: true, opacity: 0.75, depthWrite: false }), MAX_E);
+const hpFg = flatInst(billboardGeo(1, 1, true).translate(0.5, 0, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false, transparent: true }), MAX_E);
+hpFg.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_E * 3).fill(1), 3);
+hpBg.renderOrder = 3; hpFg.renderOrder = 4;
+function drawHpBars() {
+  let n = 0; const ba = hpBg.instanceMatrix.array, fa = hpFg.instanceMatrix.array, fc = hpFg.instanceColor.array;
+  for (let i = 0; i < E.n; i++) {
+    const t = TYPES[E.type[i]]; if (t.boss) continue;
+    const r = E.hp[i] / (E.maxhp[i] || 1); if (r >= 0.999 && !E.elite[i]) continue;
+    const w = E.elite[i] ? 1.6 : 0.9, y = t.h * (E.elite[i] ? 1.55 : 1) + 0.25;
+    writeMatrix(ba, n, E.x[i], y, E.z[i], w + 0.08, 0.16, 1);
+    writeMatrix(fa, n, E.x[i] - w / 2, y, E.z[i] + 0.01, w * Math.max(0, r), 0.1, 1);
+    if (E.elite[i]) { fc[n * 3] = 1; fc[n * 3 + 1] = 0.8; fc[n * 3 + 2] = 0.25; } else { fc[n * 3] = 0.95; fc[n * 3 + 1] = 0.3; fc[n * 3 + 2] = 0.35; }
+    n++;
+  }
+  hpBg.count = hpFg.count = n; hpBg.instanceMatrix.needsUpdate = hpFg.instanceMatrix.needsUpdate = hpFg.instanceColor.needsUpdate = true;
+}
+
+// 莎士比亚的大羽毛笔：泼墨水之前，一支几米高的羽毛笔从天上落下来点在地上
+const QUILLS = [];
+const quillMat = new THREE.MeshLambertMaterial({ color: 0xf4f0e6, emissive: 0x302820, side: THREE.DoubleSide });
+function dropQuill(x, z, warn) {
+  const g = new THREE.Group();
+  const vane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 5).translate(0, 3.2, 0), quillMat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.02, 6, 6).translate(0, 3, 0), new THREE.MeshLambertMaterial({ color: 0x302820 }));
+  g.add(vane, shaft); g.rotation.z = 0.35; g.position.set(x, 12, z); g.castShadow = true; vane.castShadow = true; scene.add(g);
+  QUILLS.push({ g, t: 0, warn });
+}
+function stepQuills(dt) {
+  for (let k = QUILLS.length - 1; k >= 0; k--) {
+    const q = QUILLS[k]; q.t += dt; const f = Math.min(1, q.t / q.warn);
+    q.g.position.y = 12 * (1 - f * f); q.g.rotation.y += dt * 2;
+    if (q.t > q.warn + 0.4) { scene.remove(q.g); QUILLS.splice(k, 1); }
+  }
 }
 
 // ---------- 伴舞大游行：被歌声打动的怪，有三成会跟在奶娃后面排队跳舞，还会一起唱歌打怪；被打中跑掉几个 ----------
@@ -1890,7 +2119,7 @@ function stepFans(dt) {
     F.ph[f] += dt * 7;
     F.cd[f] -= dt;
     if (F.cd[f] <= 0) {   // 一起唱：朝最近的怪射一个小音符
-      F.cd[f] = 1.6 + Math.random() * 0.6;
+      F.cd[f] = (1.6 + Math.random() * 0.6) * (stats.evo.choir ? 0.5 : 1);
       const j = nearestEnemy(F.x[f], F.z[f], 9);
       if (j >= 0) shootFrom(F.x[f], F.z[f], Math.atan2(E.x[j] - F.x[f], E.z[j] - F.z[f]), stats.dmgMul * 0.6);
     }
@@ -2010,6 +2239,8 @@ function draw(dt) {
   if (tybalt && tybalt.visible) tybalt.userData.mixer.update(dt);
   if (caliban) { if (act !== 5 || !(dogSpawned && !dogDown)) caliban.visible = false; else if (caliban.userData.mixer) caliban.userData.mixer.update(dt); }
   if (ariel.visible) { const a = time * 1.6; ariel.position.set(player.x + Math.cos(a) * 1.6, 1.9 + Math.sin(time * 3) * 0.25, player.z + Math.sin(a) * 1.0); }
+  drawCorpses();
+  drawHpBars();
   {   // 伴舞：用怪的模型画，小一号、粉一点，一蹦一跳左右扭，头上有颗心
     const hm = heartMesh.instanceMatrix.array; let nh = 0;
     for (let f = 0; f < F.n; f++) {
@@ -2030,10 +2261,10 @@ function draw(dt) {
   const nm = noteMesh.instanceMatrix.array;
   for (let i = 0; i < B.n; i++) { const s = 0.8 * B.size[i]; writeMatrix(nm, i, B.x[i], 0.95, B.z[i], s, s, s); }
   let nn = B.n;
-  const on = phase === 'fight' || phase === 'levelup' ? ([0, 2, 3, 4][stats.orbit] || 0) : 0;
+  const on = phase === 'fight' || phase === 'levelup' ? (stats.evo.wreath ? 6 : [0, 2, 3, 4][stats.orbit] || 0) : 0;
   for (let k = 0; k < on; k++) {
     const a = time * (stats.orbit >= 3 ? 3.6 : 2.6) + k / on * Math.PI * 2;
-    writeMatrix(nm, nn++, player.x + Math.sin(a) * 2.3, 1.0, player.z + Math.cos(a) * 2.3, 0.8, 0.8, 0.8);
+    const orR2 = (stats.evo.wreath ? 3.2 : 2.3) * Math.sqrt(stats.area); writeMatrix(nm, nn++, player.x + Math.sin(a) * orR2, 1.0, player.z + Math.cos(a) * orR2, 0.8, 0.8, 0.8);
   }
   noteMesh.count = nn; noteMesh.instanceMatrix.needsUpdate = true;
 

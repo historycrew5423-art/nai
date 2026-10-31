@@ -350,3 +350,16 @@ body.portrait #rotate { display: flex; }
 #wxguide h2 { font-family: var(--serif, serif); font-size: calc(var(--u) * 6); color: #ffd98a; margin: 0 0 calc(var(--u) * 2); }
 #wxguide p { font-size: calc(var(--u) * 3.2); line-height: 1.7; margin: 0 0 calc(var(--u) * 3); } #wxguide b { color: #ffd98a; }
 #wxguide .arrow { position: absolute; right: calc(var(--u) * 4); top: calc(var(--u) * 1); font-size: calc(var(--u) * 12); color: #ffd98a; animation: blink 1s infinite; }
+
+/* 技能卡：唱法（金）、心情（粉）、进化（彩虹边）、命运卡（墨水蓝）；"现在推荐"和进化配方 */
+#cards button { position: relative; }
+#cards button .tag { position: absolute; top: calc(var(--u) * -1.6); left: 50%; transform: translateX(-50%); font-style: normal; font-size: calc(var(--u) * 2.2); padding: calc(var(--u) * .3) calc(var(--u) * 1.6);
+  border-radius: 99px; background: #d9a441; color: #2a1a10; font-weight: 900; letter-spacing: .15em; white-space: nowrap; }
+#cards button.mood .tag { background: #ff9ab8; }
+#cards button.evo { border-color: #fff; box-shadow: 0 0 calc(var(--u) * 3) rgba(255, 220, 120, .8), inset 0 0 calc(var(--u) * 2) rgba(255, 180, 255, .35); }
+#cards button.evo .tag { background: linear-gradient(90deg, #ffd060, #ff8ab8, #8ad8ff); }
+#cards button.fate { border-color: #8ab4ff; background: linear-gradient(180deg, rgba(24, 30, 60, .96), rgba(10, 12, 28, .97)); }
+#cards button.fate .tag { background: #8ab4ff; }
+#cards button .rec { font-style: normal; font-size: calc(var(--u) * 2.2); color: #7fe3d8; }
+#cards button .recipe { font-style: normal; font-size: calc(var(--u) * 2.1); color: #ffb4c0; }
+#cards .reroll { margin-top: calc(var(--u) * 2.4); font-family: inherit; font-size: calc(var(--u) * 2.6); color: #f2ede4; background: rgba(40, 30, 50, .85); border: 1px solid #c99a4a; border-radius: 99px; padding: calc(var(--u) * .8) calc(var(--u) * 3); }
