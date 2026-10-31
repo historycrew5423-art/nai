@@ -6,10 +6,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Input } from './input.js';
-import { byId, drawCards, baseStats } from './skills.js';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js';
+import { Input } from './input.js?v=20261031c';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031c';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031c';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031c';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -47,6 +47,7 @@ function layout() {
 }
 addEventListener('resize', layout);
 addEventListener('orientationchange', () => setTimeout(layout, 350));   // iOS 转屏后过一会儿才报新的大小
+document.addEventListener('fullscreenchange', () => setTimeout(layout, 200));
 if (window.visualViewport) visualViewport.addEventListener('resize', layout);
 layout();
 
@@ -873,14 +874,17 @@ ui.innerHTML = `
 <div id="dlg" class="hide" data-ui><div class="cg hide"><img alt=""></div><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><div class="tbg"><img alt="" src="assets/cg/key-rj.jpg"></div>
+<div id="title" class="hide" data-ui><div class="tbg"><img alt="" src="assets/cg/key-rj.jpg"></div>
  <div class="thead"><h1>莎士比亚的两场戏</h1><p class="sub">用一首情歌，改写莎士比亚的结局</p></div>
  <div class="stories">
-  <div class="story" data-s="rj"><img alt="" src="assets/cg/key-rj.jpg"><div class="st"><b>第一部 · 罗密欧与朱丽叶</b><small>舞会 · 阳台 · 决斗 · 墓室</small><div class="sb"></div></div></div>
-  <div class="story" data-s="tp"><img alt="" src="assets/cg/key-tp.jpg"><div class="st"><b>第二部 · 暴风雨</b><small>新 · 海上的魔法岛</small><div class="sb"></div></div></div>
+  <div class="story" data-s="rj"><img alt="" src="assets/cg/key-rj.jpg"><div class="st"><b>第一部 · 罗密欧与朱丽叶</b><small>选一幕开始</small><div class="acts"></div><div class="sb"></div></div></div>
+  <div class="story" data-s="tp"><img alt="" src="assets/cg/key-tp.jpg"><div class="st"><b>第二部 · 暴风雨</b><small>新 · 海上的魔法岛</small><div class="acts"></div><div class="sb"></div></div></div>
  </div>
  <div class="tfoot"><span class="hello"></span><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
  <p class="go">加载中……</p><p class="ver">${VERSION} 开发中</p><p class="fshint hide"></p></div>
+<div id="cover" data-ui><div class="cbg"><img class="c1" alt="" src="assets/cg/key-rj.jpg"><img class="c2" alt="" src="assets/cg/key-tp.jpg"></div>
+ <div class="clogo"><small>一首情歌，改写两个结局</small><h1>莎士比亚的两场戏</h1><p>罗密欧与朱丽叶 · 暴风雨</p></div>
+ <p class="cgo">加载中……</p><p class="chint">手机横过来玩 · 开声音更好听</p><p class="fshint2"></p></div>
 <div id="over" class="hide" data-ui><h1></h1><p class="sub"></p><p class="tip"></p><div class="btns"></div></div>
 <div id="cast" class="hide" data-ui><h2>人物关系</h2><div class="row"></div><p class="hint">点一下继续</p></div>
 <div id="mem" class="hide" data-ui><div class="inner"><h2></h2><p class="stat"></p><h3>名画</h3><div class="grid g-paint"></div><h3>插图</h3><div class="grid g-cg"></div><h3>你说过的情话</h3><ul class="said"></ul><div class="btns"><button class="b-back">返回</button><button class="b-clear">清空存档</button></div></div></div>
@@ -1025,10 +1029,13 @@ async function startStory(story, from, again) {
     if (!again) await playScene(SCENES.tpIntro);
     beginAct(5); return;
   }
-  const snap = from > 1 && save.rj.snaps[from];
-  if (snap) {   // 继续：恢复那一幕开头的等级和技能
-    const d = structuredClone(snap); stats = { ...baseStats(), ...d.stats }; levels = d.levels; level = d.level; xp = d.xp;
-    player.hp = maxHp(); beginAct(from); return;
+  if (from > 1) {   // 选关卡或继续：有这一幕的存档就用自己的等级和技能，没有就送一套够用的
+    const snap = save.rj.snaps[from];
+    if (snap) { const d = structuredClone(snap); stats = { ...baseStats(), ...d.stats }; levels = d.levels; level = d.level; xp = d.xp; }
+    else giveBuild(from);
+    player.hp = maxHp();
+    if (!again && SCENES[`act${from - 1}To${from}`]) await playScene(SCENES[`act${from - 1}To${from}`]);   // 先放这一幕前面的剧情，好知道故事走到哪了
+    beginAct(from); return;
   }
   if (START_ACT > 1 && !again) {   // 测试用：直接从后面的幕开始，先送几级
     for (const id of ['chord', 'presto', 'sustain', 'chord']) { takeSkill(id); level++; }
@@ -1037,6 +1044,11 @@ async function startStory(story, from, again) {
   beginAct(again ? 1 : START_ACT);
 }
 const startRun = (again) => startStory('rj', 1, again);
+// 直接从后面的幕开始、又没有存档时，送的技能和等级（大约是正常打到那一幕的水平）
+function giveBuild(n) {
+  const picks = { 2: ['chord', 'presto', 'sustain'], 3: ['chord', 'presto', 'sustain', 'forte', 'chord'], 4: ['chord', 'presto', 'sustain', 'forte', 'chord', 'orbit', 'hymn'] }[n] || [];
+  for (const id of picks) { takeSkill(id); level++; }
+}
 function beginAct(n, retry) {
   act = n;
   if (retry && snapshot) { ({ stats, levels, level, xp } = structuredClone(snapshot)); player.hp = maxHp(); }
@@ -1574,9 +1586,26 @@ function refreshTitle() {
   if (r > 1 && save.rj.snaps[r]) { rjb.append(btn(`继续 · ${ACT_NO[r]}幕`, () => go('rj', r), true), btn('从头开始', () => go('rj', 1))); }
   else rjb.append(btn('开始演出', () => go('rj', 1), true));
   tpb.append(btn('开始演出', () => go('tp'), true));
+  // 选关卡：每一幕都能直接进（打到过的打勾）
+  const ra = $('#title .story[data-s=rj] .acts'), ta = $('#title .story[data-s=tp] .acts');
+  const actBtn = (n, label, fn, done) => { const b = document.createElement('button'); b.className = 'act' + (done ? ' done' : ''); b.innerHTML = `<i>${ACT_NO[n] || ''}幕</i>${label}`; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+  ra.innerHTML = ''; ta.innerHTML = '';
+  [['舞会', 1], ['阳台', 2], ['决斗', 3], ['墓室', 4]].forEach(([label, n]) => ra.append(actBtn(n, label, () => go('rj', n), save.rj.reached > n || (n === 4 && save.endings.length))));
+  ta.append(actBtn(1, '漂岛', () => go('tp'), save.paintings.includes('tp1')));
+  const more = document.createElement('span'); more.className = 'more'; more.textContent = '下一幕制作中'; ta.append(more);
   $('#title .go').textContent = titleReady ? '' : '加载中……';
   $('#title').classList.toggle('loading', !titleReady);
 }
+// 封面：两张主图交替、慢慢推近，标题，点一下进入选择页面
+let coverReady = false;
+$('#cover').onclick = () => {
+  if (!coverReady) return;
+  initAudio(); pluck(0, 0.06, 0.6, 'sine'); pluck(4, 0.05, 0.7, 'sine'); pluck(7, 0.05, 0.8, 'sine');
+  if (!AUTO) goFullscreen();
+  const c = $('#cover'); c.classList.add('leave'); setTimeout(() => { show(c, false); c.classList.remove('leave'); }, 450);
+  refreshTitle(); show($('#title'));
+};
+{ const h = $('#title .fshint'); if (h && h.innerHTML) $('#cover .fshint2').innerHTML = h.innerHTML; }
 function showTitle() {
   phase = 'title'; resetRun(); setAct(1);
   show($('#over'), false); show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false); show($('#boss'), false); show($('#calm'), false);
@@ -1622,9 +1651,10 @@ Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95), loadA
   hero = h; juliet = j; tybalt = t; mercutio = m; caliban = c;
   scene.add(hero, juliet, tybalt, mercutio); if (caliban) scene.add(caliban);
   juliet.visible = tybalt.visible = mercutio.visible = false; if (caliban) caliban.visible = false;
-  titleReady = true;
+  titleReady = true; coverReady = true;
+  $('#cover .cgo').textContent = '点一下进入';
   refreshTitle();
-  if (AUTO) go(START_ACT === 5 ? 'tp' : 'rj', 1);
+  if (AUTO) { show($('#cover'), false); go(START_ACT === 5 ? 'tp' : 'rj', START_ACT > 1 && START_ACT < 5 ? 1 : 1); }
 }).catch((e) => { $('#title .go').textContent = '加载失败，请刷新：' + e.message; console.error(e); });
 
 // 给自动测试用的接口

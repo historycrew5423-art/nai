@@ -29,7 +29,7 @@ const visible = (sel) => page.evaluate((s) => { const e = document.querySelector
 async function waitFor(sel, ms = 90000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await visible(sel)) return true; await page.waitForTimeout(250); } return false; }
 async function clickThrough(sel) { for (let k = 0; k < 40 && ((await visible(sel)) || (await visible('#cast'))); k++) { if (await visible('#cast')) { await page.waitForTimeout(500); await page.click('#cast'); } else await page.click(sel, { position: { x: 300, y: 200 } }); await page.waitForTimeout(250); } }
 const done = [];
-await page.waitForTimeout(5000); await shot('1-title'); done.push('title');
+await page.waitForTimeout(5000); await shot('0-cover'); await page.click('#cover'); await page.waitForTimeout(800); await shot('1-title'); done.push('title');
 await page.click('#title .story[data-s=rj] .sb button'); await page.waitForTimeout(2500); await shot('2-prologue'); done.push('prologue');
 await page.mouse.move(-10, -10);
 await clickThrough('#dlg'); await page.waitForTimeout(3000); await shot('3-fight'); done.push('fight');

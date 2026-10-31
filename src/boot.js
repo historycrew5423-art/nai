@@ -2,8 +2,8 @@
 const test = new URLSearchParams(location.search).has('test');
 if (test) {
   document.title = '压力测试（开发用）';
-  import('./stress.js');
+  import('./stress.js?v=20261031c');
 } else {
   for (const id of ['hud', 'buttons']) document.getElementById(id)?.remove();
-  import('./game.js');
+  import('./game.js?v=20261031c');
 }
