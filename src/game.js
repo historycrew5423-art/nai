@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031k';
-import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031k';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031k';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031k';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031k';
+import { Input } from './input.js?v=20261031l';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031l';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031l';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031l';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031l';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -262,6 +262,8 @@ const MAT = {
 function buildTile(act) {
   const obs = OBS[act];
   const parts = Object.fromEntries(Object.keys(MAT).map((k) => [k, []]));
+  const V = !!veronaKit, KL = {}, kp = (name, x, y, z, yaw, h) => (KL[name] = KL[name] || []).push([x, y, z, yaw, h]);
+  let kseed = act * 977; const krnd = () => ((kseed = (kseed * 16807) % 2147483647) / 2147483647);
   const put = (k, geo, x, y, z, rx = 0, ry = 0, rz = 0, s = 1) => {
     geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.scale(s, s, s); geo.translate(x, y, z);
     parts[k].push(geo.index ? geo.toNonIndexed() : geo);
@@ -277,7 +279,15 @@ function buildTile(act) {
   const mask = (x, z) => put('gold', new THREE.SphereGeometry(0.16, 8, 4).scale(1.4, 0.25, 0.9), x, 0.03, z, 0, Math.random() * 6);
   for (const o of obs) {
     const { x, z } = o;
-    if (o.kind === 'table') {
+    if (o.kind === 'table' && V) {   // 舞会长餐桌：桌上盘子、金杯、三头烛台，四边椅子
+      kp('Table_Large', x, 0, z, 0.3, 0.95);
+      for (const [dx, dz, ry] of [[1.5, 0.45, -Math.PI / 2], [-1.5, -0.45, Math.PI / 2], [0.45, 1.25, Math.PI], [-0.45, -1.25, 0]]) kp('Chair_1', x + dx, 0, z + dz, ry + 0.3, 1.05);
+      for (const [dx, dz] of [[-0.6, 0.2], [0.6, -0.2], [0, 0.35]]) kp('Table_Plate', x + dx, 0.95, z + dz, krnd() * 6, 0.05);
+      for (const [dx, dz] of [[-0.35, -0.3], [0.35, 0.3]]) kp('Chalice', x + dx, 0.95, z + dz, 0, 0.26);
+      kp('CandleStick_Triple', x, 0.95, z, 0.3, 0.55);
+      for (const k of [-1, 0, 1]) flame(x + k * 0.18 * Math.cos(0.3), 1.56, z - k * 0.18 * Math.sin(0.3));
+      pool(x, z, 3.2);
+    } else if (o.kind === 'table') {
       put('cloth', new THREE.CylinderGeometry(1.15, 1.35, 0.8, 18), x, 0.4, z);
       put('wax', new THREE.CylinderGeometry(1.17, 1.17, 0.03, 18), x, 0.81, z);
       put('gold', new THREE.TorusGeometry(1.17, 0.035, 4, 24), x, 0.8, z, Math.PI / 2);
@@ -290,6 +300,8 @@ function buildTile(act) {
       put('gold', new THREE.CylinderGeometry(0.07, 0.09, 1.7, 6), x + 0.35, 1.4, z, 0, 0, 0.15);
       for (let k = 0; k < 5; k++) put('gold', new THREE.BoxGeometry(0.02, 1.1 - k * 0.12, 0.02), x - 0.35 + k * 0.15, 1.35, z, 0, 0.4, 0);
       pool(x, z, 2.2);
+    } else if (o.kind === 'candle' && V) {   // 落地烛台
+      kp('CandleStick_Stand', x, 0, z, 0, 2.0); flame(x, 2.08, z); pool(x, z, 3.6);
     } else if (o.kind === 'candle') {
       put('iron', new THREE.CylinderGeometry(0.4, 0.45, 0.2, 10), x, 0.1, z);
       put('iron', new THREE.CylinderGeometry(0.05, 0.07, 2.0, 6), x, 1.1, z);
@@ -350,6 +362,8 @@ function buildTile(act) {
       put('iron', new THREE.CylinderGeometry(1.15, 1.15, 0.05, 16), x, 0.5, z);
       for (const dx of [-1.05, 1.05]) put('wood', new THREE.BoxGeometry(0.12, 1.6, 0.12), x + dx, 1.5, z);
       put('wood', new THREE.BoxGeometry(2.3, 0.12, 0.12), x, 2.3, z);
+    } else if (o.kind === 'cart' && V) {
+      kp('Stall_Cart_Empty', x, 0, z, 0.35, 2.2); kp('Barrel', x - 1.6, 0, z + 1.0, 0, 0.95); kp('Bucket_Wooden_1', x + 1.7, 0, z - 0.6, 0, 0.45);
     } else if (o.kind === 'cart') {
       const ry = 0.35;
       put('wood', new THREE.BoxGeometry(2.8, 0.5, 1.5), x, 0.9, z, 0, ry);
@@ -371,19 +385,32 @@ function buildTile(act) {
       put('marble', new THREE.CylinderGeometry(0.42, 0.48, 1.6, 12), x, 1.2, z);
       put('marble', new THREE.CylinderGeometry(0.2, 0.32, 0.55, 8), x, 2.2, z);
       put('marble', new THREE.SphereGeometry(0.16, 8, 6), x, 2.55, z);
+    } else if (o.kind === 'crates' && V) {
+      kp('Crate_Wooden', x - 0.5, 0, z - 0.3, 0.2, 1.0); kp('Crate_Wooden', x + 0.6, 0, z + 0.4, -0.3, 0.9); kp('Crate_Wooden', x, 0.95, z, 0.6, 0.75); kp('FarmCrate_Carrot', x + 1.2, 0, z - 0.8, 0.4, 0.5);
     } else if (o.kind === 'crates') {
       put('wood', new THREE.BoxGeometry(1.2, 1.0, 1.2), x - 0.5, 0.5, z - 0.3, 0, 0.2);
       put('wood', new THREE.BoxGeometry(1.1, 0.9, 1.1), x + 0.6, 0.45, z + 0.4, 0, -0.3);
       put('wood', new THREE.BoxGeometry(0.9, 0.7, 0.9), x, 1.35, z, 0, 0.6);
       put('orange', new THREE.SphereGeometry(0.12, 6, 4), x + 0.6, 0.98, z + 0.4);
+    } else if (o.kind === 'stall' && V) {   // 广场集市摊：一筐筐苹果、胡萝卜
+      kp('Stall_Empty', x, 0, z, Math.PI / 2, 2.6); kp('Barrel_Apples', x + 1.3, 0, z - 0.9, 0.5, 0.95); kp('FarmCrate_Apple', x + 1.5, 0, z + 0.6, 0.2, 0.55); kp('FarmCrate_Carrot', x - 1.5, 0, z + 1.1, 1.2, 0.55);
     } else if (o.kind === 'stall') {
       put('wood', new THREE.BoxGeometry(2.0, 0.9, 1.2), x, 0.45, z);
       for (const [dx, dz] of [[-0.9, -0.55], [0.9, -0.55], [-0.9, 0.55], [0.9, 0.55]]) put('wood', new THREE.BoxGeometry(0.08, 2.3, 0.08), x + dx, 1.15, z + dz);
       for (let k = 0; k < 6; k++) put(k % 2 ? 'canvas' : 'redBanner', new THREE.BoxGeometry(2.2 / 6, 0.06, 1.5), x - 1.1 + (k + 0.5) * 2.2 / 6, 2.3, z);
       put('redBanner', new THREE.PlaneGeometry(0.6, 0.9), x, 1.6, z + 0.62);
       for (let k = 0; k < 5; k++) put('orange', new THREE.SphereGeometry(0.1, 6, 4), x - 0.6 + k * 0.3, 0.98, z);
+    } else if (o.kind === 'barrels' && V) {
+      for (const [dx, dz] of [[-0.4, 0], [0.4, 0.1], [0, -0.55]]) kp('Barrel', x + dx, 0, z + dz, krnd() * 6, 1.0);
+      kp('Barrel', x, 1.0, z - 0.2, 0.4, 0.8);
     } else if (o.kind === 'barrels') {
       for (const [dx, dz] of [[-0.4, 0], [0.4, 0.1], [0, -0.55]]) put('wood', new THREE.CylinderGeometry(0.36, 0.36, 0.95, 10), x + dx, 0.48, z + dz);
+    } else if (o.kind === 'coffin' && V) {   // 墓室：石棺 + 一圈小蜡烛 + 碎花瓶
+      put('darkStone', new THREE.BoxGeometry(2.8, 0.85, 1.4), x, 0.42, z);
+      put('stone', new THREE.BoxGeometry(2.95, 0.15, 1.55), x, 0.92, z);
+      put('marble', new THREE.SphereGeometry(0.22, 8, 6).scale(3.2, 0.6, 1.4), x, 1.05, z);
+      for (let k = 0; k < 5; k++) { const cx = x - 1.2 + k * 0.6, cz = z + 1.0 + (k % 2) * 0.2; kp(k % 2 ? 'Candle_1' : 'Candle_2', cx, 0, cz, 0, 0.3 + (k % 3) * 0.08); flame(cx, 0.42 + (k % 3) * 0.08, cz); }
+      kp('Vase_Rubble_Medium', x + 1.8, 0, z - 0.8, 0.6, 0.45); pool(x, z, 2.8);
     } else if (o.kind === 'coffin') {
       put('darkStone', new THREE.BoxGeometry(2.8, 0.85, 1.4), x, 0.42, z);
       put('stone', new THREE.BoxGeometry(2.95, 0.15, 1.55), x, 0.92, z);
@@ -408,10 +435,27 @@ function buildTile(act) {
       for (let k = 0; k < 4; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.2; rose(x + Math.cos(a) * d, z + Math.sin(a) * d); }
     }
   }
+  if (V && act === 1) {   // 舞厅：墙边的长凳和花瓶、几个酒桶
+    for (const [x, z, ry] of [[-6, -17, 0], [6, -17, 0], [-6, 17, Math.PI], [6, 17, Math.PI]]) kp('Bench', x, 0, z, ry, 0.55);
+    for (const [x, z] of [[-3.5, -16.5], [3.5, -16.5], [-3.5, 16.5], [3.5, 16.5], [-16.5, -5], [16.5, 5]]) kp('Vase_4', x, 0, z, krnd() * 6, 0.9);
+    for (const [x, z] of [[-16.5, 6], [-16.5, 7.2], [16.5, -6], [16.5, -7.2]]) kp('Barrel', x, 0, z, krnd() * 6, 1.0);
+    kp('Chest_Wood', 6.5, 0, 6.5, 0.8, 0.7); kp('Pot_1', -6.5, 0, -6.5, 0, 0.5);
+  } else if (V && act === 2) {   // 花园：花丛、蕨、长凳、陶罐
+    for (let k = 0; k < 26; k++) { const x = (krnd() - 0.5) * 32, z = (krnd() - 0.5) * 32; if (Math.abs(Math.hypot(x, z) - 8) < 1.6 || obs.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + 0.8)) continue; kp(krnd() < 0.5 ? 'Flower_3_Group' : 'Fern_1', x, 0, z, krnd() * 6, 0.5 + krnd() * 0.3); }
+    for (const [x, z, ry] of [[0, -10.5, 0], [0, 10.5, Math.PI], [-10.5, 0, Math.PI / 2], [10.5, 0, -Math.PI / 2]]) kp('Bench', x, 0, z, ry, 0.55);
+    for (const [x, z] of [[-5, -5], [5, 5], [5, -5], [-5, 5]]) kp('Vase_2', x, 0, z, 0, 0.7);
+  } else if (V && act === 3) {   // 广场：水桶、兵器架、陶罐
+    kp('WeaponStand', -8.5, 0, -12.5, 0.4, 1.6); kp('Bucket_Wooden_1', -12.6, 0, -9.5, 0, 0.45); kp('Pot_1', 12.5, 0, 13.5, 0, 0.55); kp('Barrel_Apples', 8.5, 0, 12.5, 0, 0.9);
+    for (const [x, z] of [[-5, 16.5], [5, -16.5]]) kp('Crate_Wooden', x, 0, z, krnd() * 6, 0.9);
+  } else if (V && act === 4) {   // 墓室：落地烛台、宝箱、读经台
+    for (const [x, z] of [[-12.5, -9], [12.5, 9]]) { kp('CandleStick_Stand', x, 0, z, 0, 1.8); flame(x, 1.88, z); pool(x, z, 2.6); }
+    kp('Chest_Wood', 9, 0, -14, 0.5, 0.7); kp('BookStand', -9, 0, 14, 2.5, 1.2);
+  }
   if (act === 1) { pool(0, 0, 8.5); pool(20, 20, 4.5); pool(-20, 20, 4.5); pool(20, -20, 4.5); pool(-20, -20, 4.5); } // 吊灯照在地上的暖色光斑
   else if (act === 2) { for (const [x, z] of [[-6.6, -6.6], [6.6, 6.6], [6.6, -6.6], [-6.6, 6.6]]) lantern(x, z); }   // 花园：小路边四盏矮灯笼
   else if (act === 4) { for (const [x, z] of [[-17, -17], [17, 17], [-17, 6], [17, -6]]) { put('iron', new THREE.CylinderGeometry(0.05, 0.08, 0.45, 6), x, 0.22, z); flame(x, 0.55, z); pool(x, z, 2.2); } }
   const g = new THREE.Group();
+  if (V) kitInto(g, KL);
   for (const [k, list] of Object.entries(parts)) if (list.length) {
     const m = new THREE.Mesh(mergeGeometries(list), MAT[k]);
     if (k === 'pool') m.renderOrder = -1;
@@ -728,6 +772,33 @@ async function loadIslandKit() {
   if (got[0]) for (const n of KIT_NAMES) { const o = got[0].scene.getObjectByName(n); if (o) take(got[0].scene, o, n); }
   ['palm', 'pillar', 'arch'].forEach((k, i) => { if (got[i + 1]) take(got[i + 1].scene, got[i + 1].scene, k); });
   islandKit = kit;
+}
+// 维罗纳四幕的道具：Quaternius「Fantasy Props MegaKit」（CC0）里挑的 28 样（长餐桌、烛台、椅子、长凳、酒桶、花瓶、集市摊、木箱、宝箱……），
+// 合成一个 kit-verona.glb（tools/build-kit.mjs）。10-31 用户说第一幕"立体度比海岛差太多"：换掉原来代码拼的圆柱和方块
+let veronaKit = null;
+async function loadVeronaKit() {
+  const g = await getGLB('assets/models/kit-verona.glb');
+  const kit = {}; g.scene.updateMatrixWorld(true);
+  for (const node of g.scene.children) {
+    const inv = node.matrixWorld.clone().invert(), parts = [];
+    node.traverse((o) => { if (o.isMesh) parts.push({ geometry: o.geometry, material: toLambert(o.material), rel: inv.clone().multiply(o.matrixWorld) }); });
+    if (parts.length) kit[node.name] = { parts, box: new THREE.Box3().setFromObject(node).applyMatrix4(inv) };
+  }
+  const cur = tileAct; veronaKit = kit; tileAct = 0;   // 下次换幕时用新道具重搭地块
+  if (phase !== 'fight' && phase !== 'levelup' && cur >= 1 && cur <= 4) setAct(cur);
+}
+// 在地块里摆道具（每样道具一个实例化网格，地块复制 9 份时共用几何体）。list：[x, y, z, 朝向, 高度]
+function kitInto(g, L) {
+  const K = { ...(islandKit || {}), ...(veronaKit || {}) }, m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  for (const [name, list] of Object.entries(L)) {
+    const item = K[name]; if (!item || !list.length) continue;
+    const { parts, box } = item, h0 = box.max.y - box.min.y || 1, base = new THREE.Matrix4().makeTranslation(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+    for (const p of parts) {
+      const im = new THREE.InstancedMesh(p.geometry, p.material, list.length);
+      list.forEach(([x, y, z, yaw, h], i) => { const sc = h / h0; q.setFromAxisAngle(up, yaw); m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sc, sc, sc)).multiply(base).multiply(p.rel); im.setMatrixAt(i, m); });
+      im.castShadow = true; im.computeBoundingSphere(); g.add(im);
+    }
+  }
 }
 // 切换动作：淡入新的、淡出旧的。once = 只播一次，停在最后一帧（比如茂丘西奥倒下）
 function playAnim(w, name, { fade = 0.22, once = false, speed = 1 } = {}) {
@@ -1197,7 +1268,7 @@ function chooseCards(title, isChoice, custom) {
       const ph = actPhase();
       cards.forEach((k, idx) => {
         const lv = levels[k.id] || 0, b = document.createElement('button');
-        if (k.evo) { b.className = 'evo'; b.innerHTML = `<i class="tag">进化</i><b>${k.name}</b><small>${k.desc}</small><q>两首歌合成了一首新歌。</q>`; }
+        if (k.isEvo) { b.className = 'evo'; b.innerHTML = `<i class="tag">进化</i><b>${k.name}</b><small>${k.desc}</small><q>两首歌合成了一首新歌。</q>`; }
         else if (k.fate) { b.className = 'fate'; b.innerHTML = `<i class="tag">命运卡</i><b>${k.name}</b><small>${k.desc}</small><q>${k.quote}</q>`; }
         else {
           const kind = k.kind === 'song' ? '唱法' : '心情', rec = k.tag === (ph === 'early' ? 'single' : 'crowd') ? `<i class="rec">${ph === 'early' ? '怪少的时候最划算' : '怪潮来了最划算'}</i>` : '';
@@ -1884,7 +1955,7 @@ async function openChest() {   // 宝箱：挑一首歌，直接升两级
   phase = 'levelup'; sfxLevel(); shake = Math.max(shake, 0.4);
   await sleep(AUTO ? 10 : 250);
   const ev = evoReady(levels, stats.evo);
-  if (ev.length) { await chooseCards('宝箱里是进化！选一个', false, ev.map((e) => ({ ...e, evo: true }))); if (phase === 'levelup') phase = 'fight'; return; }
+  if (ev.length) { await chooseCards('宝箱里是进化！选一个', false, ev.map((e) => ({ ...e, isEvo: true }))); if (phase === 'levelup') phase = 'fight'; return; }
   const id = await chooseCards('打开宝箱！挑一首歌，直接升两级', false);
   if (id && byId[id] && (levels[id] || 0) < byId[id].max) takeSkill(id);
   if (phase === 'levelup') phase = 'fight';
@@ -2498,10 +2569,10 @@ $('#viewer').onclick = () => show($('#viewer'), false);
 // 第一批只有罗密欧和朱丽叶，下完就能点进去看开场剧情；其余的（另外三个角色、6 种怪、海岛的树和石头）在后台接着下，
 // 真要开打时还没下完，就在画面上显示进度等一下。封面上显示百分比。
 const CORE = ['anim/romeo', 'wedding-dress'];
-const REST = ['anim/tybalt', 'anim/mercutio', 'anim/caliban', ...TYPES.filter((t) => MON[t.key]).map((t) => `monsters/${t.key}`), 'kit-nature', 'props/palm', 'props/pillar', 'props/arch'];
+const REST = ['anim/tybalt', 'anim/mercutio', 'anim/caliban', ...TYPES.filter((t) => MON[t.key]).map((t) => `monsters/${t.key}`), 'kit-nature', 'kit-verona', 'props/palm', 'props/pillar', 'props/arch'];
 // 每个文件大约多大（KB，.gz 的），服务器报大小之前先用这个算百分比
 Object.entries({ 'anim/romeo': 609, 'wedding-dress': 239, 'anim/tybalt': 566, 'anim/mercutio': 525, 'anim/caliban': 370, 'monsters/lute': 152, 'monsters/birdhead': 127, 'monsters/drum': 119,
-  'monsters/cerberus': 96, 'monsters/horn': 84, 'monsters/shade': 76, 'kit-nature': 454, 'props/palm': 67, 'props/pillar': 58, 'props/arch': 75 }).forEach(([k, v]) => { LOAD.size[`assets/models/${k}.glb`] = v * 1024; });
+  'monsters/cerberus': 96, 'monsters/horn': 84, 'monsters/shade': 76, 'kit-nature': 454, 'kit-verona': 501, 'props/palm': 67, 'props/pillar': 58, 'props/arch': 75 }).forEach(([k, v]) => { LOAD.size[`assets/models/${k}.glb`] = v * 1024; });
 const pct = (list) => { let a = 0, b = 0; for (const p of list) { const u = `assets/models/${p}.glb`, s = LOAD.size[u] || 300000; a += Math.min(LOAD.got[u] || 0, s); b += s; } return Math.min(99, Math.floor(a / b * 100)); };
 let coreDone = false;
 onLoadProgress = () => {
@@ -2523,6 +2594,7 @@ const restP = coreP.then(() => Promise.all([
   loadAnimated('caliban', 2.7).then((c) => { caliban = c; c.visible = false; scene.add(c); }).catch(() => null),
   loadMonsters(),
   loadIslandKit().catch((e) => console.warn('海岛布景加载失败', e)),
+  loadVeronaKit().catch((e) => console.warn('维罗纳道具加载失败', e)),
 ]));
 restP.then(() => { if (DEBUG) console.log('全部加载完'); });
 // 开打前：第二批还没下完就等一下，画面上显示进度

@@ -363,3 +363,4 @@ body.portrait #rotate { display: flex; }
 #cards button .rec { font-style: normal; font-size: calc(var(--u) * 2.2); color: #7fe3d8; }
 #cards button .recipe { font-style: normal; font-size: calc(var(--u) * 2.1); color: #ffb4c0; }
 #cards .reroll { margin-top: calc(var(--u) * 2.4); font-family: inherit; font-size: calc(var(--u) * 2.6); color: #f2ede4; background: rgba(40, 30, 50, .85); border: 1px solid #c99a4a; border-radius: 99px; padding: calc(var(--u) * .8) calc(var(--u) * 3); }
+#cards .reroll { width: auto !important; min-height: 0 !important; display: inline-block !important; box-shadow: none !important; animation: none !important; gap: 0 !important; }
