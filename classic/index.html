@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<base href="../">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="罗密欧与朱丽叶">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/icon-180.png">
+<meta name="theme-color" content="#000000">
+<title>莎士比亚的两场戏 · 10-31 下午版</title>
+<link rel="stylesheet" href="classic/src/style.css?v=20261031l">
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="hud">加载中……</div>
+  <div id="buttons">
+    <button id="b-less">怪 −100</button>
+    <button id="b-more">怪 +100</button>
+    <button id="b-shots">子弹 ×1</button>
+    <button id="b-quality">画质 高</button>
+    <button id="b-god">无敌 开</button>
+  </div>
+</div>
+<div id="boot"><div class="bt"><small>一首情歌，改写两个结局</small><h1>莎士比亚的两场戏</h1><p>正在打开剧场……</p></div></div>
+<div id="rotate">请把手机横过来<small>转不过来的话，先关掉控制中心里的"竖排方向锁定"</small></div>
+<script type="module" src="classic/src/boot.js?v=20261031l"></script>
+</body>
+</html>
