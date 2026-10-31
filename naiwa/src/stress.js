@@ -1,7 +1,7 @@
 // v0.1 压力测试版：方块代替模型。双摇杆移动和瞄准、音符自动连发、怪潮追人、经验球。
 // 目的：先在 iPhone 上量出同屏多少只怪还不卡，再决定模型面数和画质。
 import * as THREE from 'three';
-import { Input } from './input.js?v=20261031n2';
+import { Input } from './input.js?v=20261031final';
 
 const VERSION = 'v0.1 压力测试';
 const HALF = 30;            // 可玩区域半边长（米），见 docs/场景规格.md

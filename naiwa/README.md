@@ -1,8 +1,8 @@
-# 罗密欧与朱丽叶 · 奶蛙缝合版（naiwa）
+# 罗密欧与朱丽叶 · 奶蛙缝合版（naiwa）· 最终版
 
 VibeHacks #06 参赛作品《罗密欧与朱丽叶》的一条分支：在 v0.2 的四幕剧情（舞会 → 阳台 → 决斗 → 墓室）上，缝进了《勇者奶蛙》的抽象玩法和四种梗小怪。代码全部由 AI（Kiro，模型 Claude Opus 5.5）编写。
 
-- **试玩：** https://historycrew5423-art.github.io/nai/naiwa/ （手机横屏；电脑用键盘鼠标）
+- **试玩：** https://historycrew5423-art.github.io/nai/naiwa/ （手机横屏、竖屏都能玩；电脑用键盘鼠标）
 - **主线版本《莎士比亚的两场戏》：** https://historycrew5423-art.github.io/nai/
 
 ## 玩法

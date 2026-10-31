@@ -9,13 +9,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { Input } from './input.js?v=20261031n2';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031n2';
-import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031n2';
-import { loadMinions, frameIndex, lungeOffset, SWING_TIME, WALK_RATE, WALK_FRAMES } from './minions.js?v=20261031n2';
-import { HAHA_GLYPHS, HAHA_COLORS, hahaMaterial, floatText, updateFloats, makeStars, makeLane, placeLane, loadLaugh, playHa, playLaugh, stopLaugh, makeLaughUI, loadBigFrog, bigFrogPose, pick, setLaughOut } from './naiwa.js?v=20261031n2';
-import { initMixer, loadClips, heroOut, duck, heroSay, heroBusy, holdHero, mobSay, hasClip, whoosh, pop, boing, boom, tone, speak, stopSpeak } from './sfx.js?v=20261031n2';
-import { Pacing, PACE } from './pacing.js?v=20261031n2';
+import { Input } from './input.js?v=20261031final';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031final';
+import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031final';
+import { loadMinions, frameIndex, lungeOffset, SWING_TIME, WALK_RATE, WALK_FRAMES } from './minions.js?v=20261031final';
+import { HAHA_GLYPHS, HAHA_COLORS, hahaMaterial, floatText, updateFloats, makeStars, makeLane, placeLane, loadLaugh, playHa, playLaugh, stopLaugh, makeLaughUI, loadBigFrog, bigFrogPose, pick, setLaughOut } from './naiwa.js?v=20261031final';
+import { initMixer, loadClips, heroOut, duck, heroSay, heroBusy, holdHero, mobSay, hasClip, whoosh, pop, boing, boom, tone, speak, stopSpeak } from './sfx.js?v=20261031final';
+import { Pacing, PACE } from './pacing.js?v=20261031final';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -914,7 +914,7 @@ ui.innerHTML = `
 <div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">张嘴喷“哈”打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">手机横屏竖屏都能玩：手指拖着走，不碰也会自动喷“哈”；攒满点🦘肥嘟嘟、点「变身」捧腹大笑<br>电脑：WASD 走 · 鼠标瞄 · F 肥嘟嘟 · V 变身 · 空格 闪身步 · C 换视角</p><p class="ver">${VERSION} 奶蛙缝合版：勇者奶蛙的抽象玩法</p></div>
+<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">张嘴喷“哈”打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">手机横屏竖屏都能玩：手指拖着走，不碰也会自动喷“哈”；攒满点🦘肥嘟嘟、点「变身」捧腹大笑<br>电脑：WASD 走 · 鼠标瞄 · F 肥嘟嘟 · V 变身 · 空格 闪身步 · C 换视角</p><p class="ver">${VERSION} 奶蛙缝合版 · 最终版</p></div>
 <div id="capMob" class="cap hide"></div>
 <div id="capHero" class="cap hide"></div>
 <div id="combo" class="hide"><b>0</b><span>连哈</span></div>
