@@ -1,5 +1,6 @@
 # 交接文件：给接手的 AI（每一轮都会更新）
 
+> **15:50 第 55 轮：** 玩法重做已上线（f0bf1bb，`?v=20261031l`）：一根手指、朝走路方向自动唱、音符追踪（`coneTarget`、`B.tgt`）；技能在 `src/skills.js`（唱法/心情、`EVOS` 进化、`evoReady`）；命运卡 `FATES`/`chooseFate`；自动调难度 `dda`；可打碎的东西 `BR`/`PK`；血条 `drawHpBars`；飞上天的怪 `CO`；羽毛笔 `dropQuill`。维罗纳道具在 `assets/models/kit-verona.glb`（`loadVeronaKit`、`kitInto`、`buildTile` 里 `V &&` 的分支），用 `tools/build-kit.mjs` 从 Quaternius 奇幻道具包合成。
 > **15:10 第 52 轮：** 用户说全部做。已上线（e804a7f，版本号 `?v=20261031j`）：奶娃回来+插图重画；走路放松；手感（震屏、顿帧、数字、连击）；静音键也出声；难度（血 60）；怪物技能红色提示（`castSkill`、`HZ`）；斗牛提伯尔特；精英怪和宝箱；故事重写 + 莎士比亚鬼魂（`SHAKES`）；五天倒计时；伴舞大游行（`F`、`stepFans`）；玫瑰和后台（`save.roses`、`save.perm`、`openShop`）；观众扔玫瑰番茄；结局海报（`makePoster`）；微信全屏提示；无限群岛（island.js 的 `CELL`、`landD`）；踩拍子加伤害。仓库里的 naiwa/ 是用户另做的"奶蛙缝合版"，别动。
 > **14:35 第 50 轮：** 用户发了四张原图（就是 docs/images/cast-*.jpg），确认主角是奶娃。还在讨论：故事要有悲剧感（五天倒计时、原剧名句）、走路加弹性、黑边是微信的栏、上瘾（手感、怪物技能、精英怪宝箱、少光点）、难度。等用户回"开始"再按顺序做：①奶娃回来+重画插图 ②难度+怪物技能 ③故事 ④手感+走路 ⑤静音键也出声+全屏提示 ⑥海岛无限。
 > **14:30 第 49 轮：** 用户**不赞同把主角换成人类**，要的是"奶娃"（就是 fantasy.glb 那个黄脑袋角色，只是不要像青蛙）。旧的奶娃动作模型备份在仓库外 `/projects/sandbox/.work/bak/romeo-frog.glb`，git 历史里也有（f5624fc 之前的 `assets/models/anim/romeo.glb`）。这一轮只讨论没改，等用户回答：主角和原图、无限海岛、难度、故事节奏、手机没声音（多半是静音键）。
