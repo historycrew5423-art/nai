@@ -329,7 +329,7 @@ body.portrait #rotate { display: flex; }
 #tools { top: calc(var(--u) * 19); }
 
 /* 观众剪影、扔玫瑰和番茄 */
-#fx #crowd { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 6); opacity: .9;
+#fx #crowd { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 4.6); opacity: .55;
   background: radial-gradient(circle at 50% 100%, rgba(8,5,10,.92) 0 46%, transparent 48%) 0 100% / calc(var(--u) * 6.5) calc(var(--u) * 6) repeat-x,
               radial-gradient(circle at 50% 100%, rgba(20,12,22,.85) 0 46%, transparent 48%) calc(var(--u) * 3.2) 100% / calc(var(--u) * 6.5) calc(var(--u) * 4.4) repeat-x; }
 #fx .throw { position: absolute; bottom: calc(var(--u) * 2); font-style: normal; font-size: calc(var(--u) * 5); animation: throw 1.5s cubic-bezier(.2,.7,.4,1) both; }

@@ -2,10 +2,10 @@
 const test = new URLSearchParams(location.search).has('test');
 if (test) {
   document.title = '压力测试（开发用）'; document.getElementById('boot')?.remove();
-  import('./stress.js?v=20261031i');
+  import('./stress.js?v=20261031j');
 } else {
   for (const id of ['hud', 'buttons']) document.getElementById(id)?.remove();
-  import('./game.js?v=20261031i').catch((e) => {   // 网络不好、代码没下完：封面上提示点一下重新加载
+  import('./game.js?v=20261031j').catch((e) => {   // 网络不好、代码没下完：封面上提示点一下重新加载
     console.error(e);
     const p = document.querySelector('#boot p'); if (p) { p.textContent = '网络不太好，点一下重新加载'; document.getElementById('boot').onclick = () => location.reload(); }
   });

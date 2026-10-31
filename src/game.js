@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031i';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031i';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031i';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031i';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031i';
+import { Input } from './input.js?v=20261031j';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031j';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031j';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031j';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031j';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -451,6 +451,12 @@ const LOOKS = {
   4: { bg: 0x101018, hemi: [0x7080b8, 0x1c1c2a, 1.6], moon: [0x90b0ff, 1.0] },
   5: { bg: 0x8fd3ee, hemi: [0xdff3ff, 0x9cc07a, 0.75], moon: [0xfff0d6, 1.05], sun: [-9, 16, 8], day: true, fog: [45, 90] },   // 白天的海岛：太阳偏暖、影子清楚（亮度别太高，不然沙子一片白）
 };
+let isleTiles = [], isleIX = 1e9, isleIZ = 1e9;
+function updateIsle(px, pz) {
+  const ix = Math.round(px / ISLE_CELL), iz = Math.round(pz / ISLE_CELL);
+  if (ix === isleIX && iz === isleIZ) return; isleIX = ix; isleIZ = iz;
+  let k = 0; for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) isleTiles[k++].position.set((ix + dx) * ISLE_CELL, 0, (iz + dz) * ISLE_CELL);
+}
 let isle = null, islandKit = null, noShadow = Q.has('noshadow');   // 手机太卡时自动关影子（见主循环）
 function setAct(n) {
   if (tileAct !== n) {
@@ -466,8 +472,13 @@ function setAct(n) {
   }
   // 第二部的海岛：不用无限地块，是一座有海岸的岛（src/island.js）。第一次进这一幕时才搭
   const isl = n === 5;
-  if (isl && (!isle || (isle.partial && islandKit))) { if (isle) scene.remove(isle.group); isle = makeIsland(islandKit || {}); isle.partial = !islandKit; scene.add(isle.group); }
-  if (isle) isle.group.visible = isl;
+  if (isl && (!isle || (isle.partial && islandKit))) {
+    if (isle) { for (const g of isleTiles) scene.remove(g); scene.remove(isle.sea); }
+    isle = makeIsland(islandKit || {}); isle.partial = !islandKit;
+    isleTiles = Array.from({ length: 9 }, (_, k) => (k === 4 ? isle.group : isle.group.clone()));   // 3×3 座岛，跟着主角挪，走不到头
+    for (const g of isleTiles) scene.add(g); scene.add(isle.sea); isleIX = 1e9;
+  }
+  if (isle) { for (const g of isleTiles) g.visible = isl; isle.sea.visible = isl; }
   floor.visible = !isl;
   moon.castShadow = !noShadow; heroLight.visible = !isl; heroGlow.visible = !isl;
   shadowMesh.material.opacity = isl ? 0.45 : 1;
@@ -490,13 +501,12 @@ function updateTiles(px, pz) {
 }
 // 把圆推出障碍物。障碍物离地块边至少 3 米，所以只查自己所在的那一块。
 function pushOut(p, r) {
-  if (act === 5 && isle) {   // 海岛：推出石头山、树、沉船；走到海边被挡住
+  if (act === 5 && isle) {   // 海岛：推出石头山、树、沉船（按最近那座岛的坐标算）；海里能蹚水，不再被挡住
+    const ox = p.x - isleLocal(p.x), oz = p.z - isleLocal(p.z);
     for (const o of isle.obs) {
-      const dx = p.x - o.x, dz = p.z - o.z, rr = o.r + r, d2 = dx * dx + dz * dz;
-      if (d2 < rr * rr) { const d = Math.sqrt(d2) || 1e-3; p.x = o.x + dx / d * rr; p.z = o.z + dz / d * rr; }
+      const dx = p.x - ox - o.x, dz = p.z - oz - o.z, rr = o.r + r, d2 = dx * dx + dz * dz;
+      if (d2 < rr * rr) { const d = Math.sqrt(d2) || 1e-3; p.x = ox + o.x + dx / d * rr; p.z = oz + o.z + dz / d * rr; }
     }
-    const d = Math.hypot(p.x, p.z), lim = coastR(Math.atan2(p.z, p.x)) - 1.7 - r * 0.4;
-    if (d > lim) { p.x *= lim / d; p.z *= lim / d; }
     return;
   }
   if (act === 4) { const d = Math.hypot(p.x, p.z), rr = BIER_R + r; if (d < rr) { const k = rr / (d || 1e-3); p.x *= k; p.z *= k; } }
@@ -1285,7 +1295,7 @@ function beginAct(n, retry) {
   setAct(n);
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
-  show($('#bars')); show($('#actinfo')); show($('#tools')); crowd.classList.remove('hide');
+  show($('#bars')); show($('#actinfo')); show($('#tools')); crowd.classList.toggle('hide', n === 5);   // 海岛是白天的户外，不放观众剪影（看着像黑边）
   $('#actinfo .goal').textContent = ACTS[n].goal; $('#actinfo .day').textContent = ACTS[n].day; at0().textContent = ACTS[n].day;
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; at.querySelector('small').textContent = ACTS[n].goal; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
   setTimeout(() => show(at, false), 3400);
@@ -1430,7 +1440,8 @@ function step(dt) {
   if (player.conf > 0) player.conf -= dt;   // 摇杆推得很轻时不动（原来会"站着不动却在挪"）
   const canMove = fighting || phase === 'title';
   if (canMove && phase !== 'title' && mvOn) {
-    const sp = 6.4 * stats.speedMul;
+    const wet = act === 5 && isle ? Math.min(1, Math.max(0, (landD(player.x, player.z) + 0.6) / 1.4)) : 0;   // 在海里蹚水：慢一点
+    const sp = 6.4 * stats.speedMul * (1 - wet * 0.4);
     player.x += mv.x * sp * dt; player.z += mv.y * sp * dt;
     pushOut(player, player.r);
   }
@@ -1582,11 +1593,18 @@ function step(dt) {
     fireCd = 1 / (3.4 * stats.rateMul);
     const base = Math.atan2(player.aimX, player.aimZ), spread = 0.17;
     const fan = (ang, n) => { for (let k = 0; k < n; k++) shoot(ang + (k - (n - 1) / 2) * spread); };
+    const b0 = B.n;
     fan(base, stats.projectiles);
     const en = stats.echo >= 3 ? Math.min(3, stats.projectiles) : 1;
     if (stats.echo >= 1) fan(base + Math.PI, en);
     if (stats.echo >= 2) { fan(base + Math.PI / 2, en); fan(base - Math.PI / 2, en); }
     pluck(MELODY[noteIdx++ % MELODY.length], 0.035, 0.3);
+    // 踩在背景音乐的拍子上唱出去的音符：大一号、伤害 ×1.6，偶尔跳一个"完美！"
+    const bp = beatPhase();
+    if (bp < 0.1 || bp > 0.93) {
+      for (let k = b0; k < B.n; k++) { B.dmg[k] *= 1.6; B.size[k] *= 1.35; }
+      if (gate('perfect', 2500) && phase === 'fight') floatText(player.x, player.z, '♪ 踩上拍子了！');
+    }
   }
 
   // 音符飞行、打中怪
@@ -2080,7 +2098,10 @@ function draw(dt) {
     const sun = LOOKS[tileAct]?.sun || [-6, 12, -4], tx = player.x, tz = player.z - 4;
     moon.target.position.set(tx, 0, tz); moon.position.set(tx + sun[0] * 2, sun[1] * 2, tz + sun[2] * 2);
   }
-  if (isle && isle.group.visible) isle.tick(time);   // 海岛：海浪和小船动起来
+  if (isle && isle.sea.visible) {   // 海岛：海浪和小船动起来；海跟着主角；岛按 3×3 挪；蹚水时人往下沉一点
+    isle.tick(time); isle.sea.position.x = player.x; isle.sea.position.z = player.z; updateIsle(player.x, player.z);
+    if (hero) { const w = Math.min(1, Math.max(0, (landD(player.x, player.z) + 0.3) / 1.2)); hero.position.y = -0.32 * w; }
+  }
 
   // 镜头：打的时候跟着主角；幕结束时拉近；名画定格时拉起
   const want = (phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1) * (act === 5 ? 1.12 : 1);   // 海岛镜头高一点，多看到海

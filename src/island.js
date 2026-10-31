@@ -13,6 +13,9 @@ export const coastR = (a) => ISLE_R * (1 + 0.08 * Math.sin(3 * a + 1) + 0.05 * M
 export const coastD = (x, z) => Math.hypot(x, z) - coastR(Math.atan2(z, x));
 export const SEA_Y = -0.22;
 export const START = { x: 0, z: -12 };   // 开场站在岛的北边，画面上方就是海、码头和帆船
+// 10-31 第 51 轮：用户要地图无限大。整座岛（连同四座小岛）每 100 米重复一次，变成走不完的群岛；岛和岛之间是浅水，能蹚过去（会慢一点）
+export const CELL = 100;
+export const local = (v) => v - CELL * Math.round(v / CELL);
 
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const n2 = (x, z) => 0.5 * Math.sin(x * 0.31 + z * 0.17) + 0.3 * Math.sin(x * 0.13 - z * 0.41 + 1.3) + 0.2 * Math.sin(x * 0.71 + z * 0.53 + 2.1);
@@ -22,8 +25,10 @@ const lin = (hex) => new THREE.Color(hex);   // 十六进制颜色转成线性�
 const ISLETS = [[-1.1, 9, 5.5], [-2.35, 8, 4.2], [0.55, 9, 5], [2.55, 8, 4.6]].map(([a, off, r]) => {
   const d = coastR(a) + off + r; return { x: Math.cos(a) * d, z: Math.sin(a) * d, r };
 });
-const isletD = (it, x, z) => { const dx = x - it.x, dz = z - it.z, a = Math.atan2(dz, dx); return Math.hypot(dx, dz) - it.r * (1 + 0.1 * Math.sin(3 * a + it.r) + 0.05 * Math.sin(7 * a)); };
+export const isletD = (it, x, z) => { const dx = x - it.x, dz = z - it.z, a = Math.atan2(dz, dx); return Math.hypot(dx, dz) - it.r * (1 + 0.1 * Math.sin(3 * a + it.r) + 0.05 * Math.sin(7 * a)); };
 
+// 到最近的陆地（大岛或小岛）的距离，按 100 米一格换算到本格：负数是在岸上，正数是在水里
+export function landD(x, z) { const lx = local(x), lz = local(z); let d = coastD(lx, lz); for (const it of ISLETS) d = Math.min(d, isletD(it, lx, lz)); return d; }
 // 岛上的沙子小路（折线）
 const DOCK_A = -1.95, DOCK = { x: Math.cos(DOCK_A) * coastR(DOCK_A), z: Math.sin(DOCK_A) * coastR(DOCK_A) };   // 码头在北边海岸上的位置
 const PATHS = [
@@ -84,16 +89,17 @@ function seaMaterial() {
   const uIs = ISLETS.map((it) => new THREE.Vector3(it.x, it.z, it.r));
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    uniforms: { uT: { value: 0 }, uR: { value: ISLE_R }, uIs: { value: uIs } },
+    uniforms: { uT: { value: 0 }, uR: { value: ISLE_R }, uIs: { value: uIs }, uCell: { value: CELL } },
     vertexShader: 'varying vec2 vP; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vP = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `
-      uniform float uT, uR; uniform vec3 uIs[4]; varying vec2 vP;
+      uniform float uT, uR, uCell; uniform vec3 uIs[4]; varying vec2 vP;
       void main() {
-        float a = atan(vP.y, vP.x);
-        float d = length(vP) - uR * (1.0 + 0.08 * sin(3.0 * a + 1.0) + 0.05 * sin(5.0 * a + 2.0) + 0.03 * sin(9.0 * a));
+        vec2 P = vP - uCell * floor(vP / uCell + 0.5);   // 换算到最近的那座岛
+        float a = atan(P.y, P.x);
+        float d = length(P) - uR * (1.0 + 0.08 * sin(3.0 * a + 1.0) + 0.05 * sin(5.0 * a + 2.0) + 0.03 * sin(9.0 * a));
         float ang = a;
         for (int i = 0; i < 4; i++) {
-          vec2 q = vP - uIs[i].xy; float b = atan(q.y, q.x);
+          vec2 q = P - uIs[i].xy; float b = atan(q.y, q.x);
           float di = length(q) - uIs[i].z * (1.0 + 0.1 * sin(3.0 * b + uIs[i].z) + 0.05 * sin(7.0 * b));
           if (di < d) { d = di; ang = b; }
         }
@@ -161,8 +167,8 @@ export function makeIsland(kit = {}) {
   const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTex() });
   group.add(land(0, 0, 34, 104, coastD, true, groundMat));
   for (const it of ISLETS) group.add(land(it.x, it.z, it.r + 5, 28, (x, z) => isletD(it, x, z), false, groundMat));
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 300).rotateX(-Math.PI / 2), seaMaterial());
-  sea.position.y = SEA_Y; sea.renderOrder = -1; group.add(sea);   // 透明的东西里最先画，音符、萤火叠在上面
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(220, 220).rotateX(-Math.PI / 2), seaMaterial());   // 海只有一块，跟着主角走（颜色按世界坐标算，看不出在动）
+  sea.position.y = SEA_Y; sea.renderOrder = -1;   // 透明的东西里最先画，音符、萤火叠在上面
 
   // 碰撞：[x, z, 半径]
   const block = (x, z, r) => obs.push({ x, z, r });
@@ -255,5 +261,5 @@ export function makeIsland(kit = {}) {
     sea.material.uniforms.uT.value = t;
     boat.position.y = SEA_Y - 0.25 + Math.sin(t * 1.3) * 0.06; boat.rotation.z = Math.sin(t * 1.1) * 0.05; boat.rotation.x = Math.sin(t * 0.8) * 0.03;
   };
-  return { group, obs, tick };
+  return { group, sea, obs, tick };
 }
