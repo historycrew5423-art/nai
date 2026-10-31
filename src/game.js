@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031n';
-import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031n';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031n';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031n';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031n';
+import { Input } from './input.js?v=20261031o';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031o';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031o';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031o';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031o';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -1124,6 +1124,23 @@ function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); l
 function sfxHit() { if (laughT > 0) return; if (gate('hit', 60)) burst({ dur: 0.045, vol: 0.018, freq: 2400, q: 3 }); }
 function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { t0: k * 0.055, dur: 0.45, vol: 0.05, type: 'triangle' })); burst({ t0: 0.3, dur: 0.6, vol: 0.03, freq: 7000, type: 'highpass' }); }
 function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq: 900, q: 1.5 }); }
+// 小怪的叫声（我们自己合成的，不用网上来源不明的梗音效）：每种第一次出现一定叫，之后隔 4 到 7 秒才叫一次；
+// 大笑的时候、有人在说话的时候不叫（主角和旁白的声音最突出，学队友版的"声音分层"）
+const VOICED = new Set(); let voiceNext = 0;
+function monsterVoice(key, x) {
+  if (!actx || muted || laughT > 0) return;
+  const now = performance.now(), first = !VOICED.has(key);
+  if (!first && (now < voiceNext || barkT > 0.3)) return;
+  VOICED.add(key); voiceNext = now + 4000 + Math.random() * 3000;
+  const v = 0.05;
+  if (key === 'lute') { tone(330, { dur: 0.18, vol: v, type: 'square' }); tone(349, { t0: 0.12, dur: 0.25, vol: v, type: 'square' }); }   // 走调的两声
+  else if (key === 'drum') { tone(110, { dur: 0.16, vol: v * 2, to: 70 }); tone(110, { t0: 0.18, dur: 0.22, vol: v * 2, to: 60 }); }      // 咚咚
+  else if (key === 'birdhead') { tone(760, { dur: 0.22, vol: v, type: 'sawtooth', to: 380 }); burst({ dur: 0.18, vol: v, freq: 1800, q: 4 }); }   // 嘎
+  else if (key === 'horn') tone(220, { dur: 0.35, vol: v * 0.9, type: 'sawtooth', to: 180 });                                       // 嘟——
+  else if (key === 'shade') tone(520, { dur: 0.7, vol: v * 0.8, to: 260, attack: 0.1 });                                              // 呜——
+  else return;
+  if (first) floatText(x, player.z - 2, { lute: '“走调啦——”', drum: '“咚咚！”', birdhead: '“嘎！”', horn: '“嘟——”', shade: '“呜——”' }[key]);
+}
 function sfxClick() { if (gate('click', 60)) tone(1250, { dur: 0.05, vol: 0.03, type: 'triangle' }); }
 function sfxBoss() { tone(98, { dur: 1.4, vol: 0.07, type: 'sawtooth', to: 82 }); tone(146.8, { dur: 1.4, vol: 0.04, type: 'sawtooth', to: 123 }); burst({ dur: 0.9, vol: 0.06, freq: 260, type: 'lowpass' }); }
 function sfxAct() { [[0, 4, 7], [5, 9, 12], [7, 11, 14], [12, 16, 19]].forEach((ch, k) => ch.forEach((n) => tone(nt(n), { t0: k * 0.16, dur: k === 3 ? 0.9 : 0.25, vol: 0.035, type: 'triangle' }))); }
@@ -2137,11 +2154,21 @@ function launchCorpse(i, t) {
   const k = CO.n++, dx = E.x[i] - player.x, dz = E.z[i] - player.z, d = Math.hypot(dx, dz) || 1;
   CO.ty[k] = E.type[i]; CO.x[k] = E.x[i]; CO.y[k] = 0; CO.z[k] = E.z[i];
   CO.vx[k] = dx / d * (2 + Math.random() * 3); CO.vz[k] = dz / d * (2 + Math.random() * 3); CO.vy[k] = 7 + Math.random() * 4; CO.sp[k] = (Math.random() - 0.5) * 20; CO.t[k] = 0;
+  // 每种怪倒下的样子不一样（学队友版"按各自的梗飞走"，收着点）：鼓怪像皮球弹两下，鸟嘴面具扑腾着往远处飞，号角像螺旋桨转着升天，亡魂打着旋慢慢散掉
+  const key = t.key;
+  if (key === 'drum') { CO.vy[k] = 5.5; CO.vx[k] *= 0.6; CO.vz[k] *= 0.6; CO.sp[k] = 2; }
+  else if (key === 'birdhead') { CO.vy[k] = 5; CO.vx[k] = dx / d * 7; CO.vz[k] = dz / d * 7; CO.sp[k] = 1; }
+  else if (key === 'horn') { CO.vy[k] = 9; CO.vx[k] *= 0.3; CO.vz[k] *= 0.3; CO.sp[k] = 0.1; }
+  else if (key === 'shade') { CO.vy[k] = 2.2; CO.vx[k] *= 0.2; CO.vz[k] *= 0.2; CO.sp[k] = 0.05; }
+  monsterVoice(key, E.x[i]);
 }
 const qC = new THREE.Quaternion(), eC = new THREE.Euler(), mC = new THREE.Matrix4(), pC = new THREE.Vector3(), sC = new THREE.Vector3();
 function stepCorpses(dt) {
   for (let k = CO.n - 1; k >= 0; k--) {
-    CO.t[k] += dt; CO.vy[k] -= 22 * dt; CO.x[k] += CO.vx[k] * dt; CO.y[k] += CO.vy[k] * dt; CO.z[k] += CO.vz[k] * dt;
+    const ky = TYPES[CO.ty[k]].key, g = ky === 'shade' ? 0 : ky === 'birdhead' ? 9 : ky === 'horn' ? 6 : 22;
+    CO.t[k] += dt; CO.vy[k] -= g * dt; CO.x[k] += CO.vx[k] * dt; CO.y[k] += CO.vy[k] * dt; CO.z[k] += CO.vz[k] * dt;
+    if (ky === 'drum' && CO.y[k] < 0 && CO.t[k] < 0.85) { CO.y[k] = 0; CO.vy[k] = Math.abs(CO.vy[k]) * 0.55; }   // 鼓怪弹起来
+    if (ky === 'birdhead') CO.y[k] += Math.sin(CO.t[k] * 30) * 0.03;   // 扑腾
     if (CO.t[k] > 0.9 || CO.y[k] < -0.5) { if (CO.t[k] > 0.9) ring(CO.x[k], CO.z[k], 0.5, 0.25); CO.n--; for (const a of [CO.ty, CO.x, CO.y, CO.z, CO.vx, CO.vy, CO.vz, CO.sp, CO.t]) a[k] = a[CO.n]; }
   }
 }
@@ -2150,7 +2177,8 @@ function drawCorpses() {   // 画在怪的实例化网格里（第 0 帧姿势�
     const mf = monFrames[CO.ty[k]]; if (!mf) continue;
     const fm = mf.meshes[0], key = CO.ty[k] * 8, k2 = fcounts[key]++;
     const sc = 1 - CO.t[k] * 0.6;
-    eC.set(CO.t[k] * CO.sp[k], CO.t[k] * 6, CO.t[k] * CO.sp[k] * 0.7); qC.setFromEuler(eC);
+    const ky = TYPES[CO.ty[k]].key, spinY = ky === 'horn' ? 40 : ky === 'shade' ? 18 : ky === 'drum' ? 2 : 6;
+    eC.set(CO.t[k] * CO.sp[k], CO.t[k] * spinY, CO.t[k] * CO.sp[k] * 0.7 + (ky === 'birdhead' ? Math.sin(CO.t[k] * 30) * 0.4 : 0)); qC.setFromEuler(eC);
     mC.compose(pC.set(CO.x[k], CO.y[k], CO.z[k]), qC, sC.set(sc, sc, sc)); mC.toArray(fm.instanceMatrix.array, k2 * 16);
     const col = fm.instanceColor.array; col[k2 * 3] = 2.2; col[k2 * 3 + 1] = 1.6; col[k2 * 3 + 2] = 1.9;
   }
@@ -2241,7 +2269,7 @@ function drawFrog() {
   frog.group.visible = on; if (hero) hero.visible = hero.visible && !on;
   if (!on) return;
   const t = 3.2 - laughT, grow = Math.min(1, t * 5) * (laughT < 0.25 ? laughT / 0.25 : 1);
-  frog.group.position.set(player.x, 0, player.z); frog.group.rotation.y = Math.atan2(-camera.position.x + player.x, -(camera.position.z - player.z)) + Math.PI;
+  frog.group.position.set(player.x, 0, player.z); frog.group.rotation.y = 0;   // 面朝镜头
   frog.inner.scale.setScalar(0.4 + grow * 0.6); frog.inner.position.y = Math.abs(Math.sin(t * 9)) * 0.25;
   frog.inner.rotation.x = -0.12 + Math.sin(t * 7) * 0.12;   // 前仰后合
   const a = Math.sin(t * 15), b = Math.sin(t * 15 + 1.2), B = frog.bones;
@@ -2508,7 +2536,7 @@ function draw(dt) {
       playAnim(hero, !mv ? 'idle' : fast || !hero.userData.actions.walk ? 'run' : 'walk', { speed: !mv ? 1.4 : fast ? 0.85 * k + 0.25 * player.moving : (0.9 + player.moving * 0.8) * k, fade: 0.32 });
     }
     hero.userData.mixer.update(dt);
-    hero.visible = !(player.hurtCd > 0.25 && Math.floor(time * 20) % 2);
+    hero.visible = laughT <= 0 && !(player.hurtCd > 0.25 && laughT <= 0 && Math.floor(time * 20) % 2);
   }
   if (juliet && juliet.visible && !juliet.userData.lying) { juliet.userData.inner.position.y = 0.06 + Math.sin(time * 1.8) * 0.04; }
   if (mercutio && mercutio.visible) {   // 第三幕：茂丘西奥跟在身边跑，倒下时播"倒下"并停在最后一帧
