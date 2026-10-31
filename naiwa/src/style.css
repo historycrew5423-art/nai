@@ -32,7 +32,8 @@ html, body {
   font: 18px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
 }
 #rotate small { font-size: 13px; opacity: .7; }
-body.portrait #rotate { display: flex; }
+/* 正式游戏横竖屏都能玩；只有压力测试版（?test=1，src/stress.js）竖着拿时还提示横过来 */
+body.rotate-hint #rotate { display: flex; }
 
 /* ---------- 正式游戏的界面（src/game.js）。--u 是画面高度的 1%，字和框跟着画面大小缩放 ---------- */
 #ui { position: absolute; inset: 0; pointer-events: none; color: #f2ede4;
@@ -165,13 +166,6 @@ body.portrait #rotate { display: flex; }
 #combo.pop b { animation: combopop .22s ease-out; }
 @keyframes combopop { 0% { transform: scale(1.6); } 100% { transform: scale(1); } }
 
-#fat { position: absolute; left: calc(var(--u) * 2.5); top: calc(var(--u) * 7.6); display: flex; align-items: center; gap: calc(var(--u) * 1); pointer-events: none; }
-#fat b { font: 900 calc(var(--u) * 2.3) "Microsoft YaHei", "PingFang SC", sans-serif; color: #ffb3e6; text-shadow: 0 1px 3px #000; white-space: nowrap; }
-#fat .fatbar { width: calc(var(--u) * 24); height: calc(var(--u) * 1.3); background: rgba(10, 8, 14, .6); border: 1px solid rgba(255, 179, 230, .7); border-radius: 99px; overflow: hidden; }
-#fat .fatbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff7cc8, #ffd0f0); }
-#fat.full .fatbar { box-shadow: 0 0 calc(var(--u) * 1.4) #ff7cc8; animation: fatwob .25s ease-in-out infinite alternate; }
-@keyframes fatwob { to { transform: scale(1.04, 1.25); } }
-
 #fatBanner { position: absolute; left: 50%; top: calc(var(--u) * 20); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * 1.2);
   padding: calc(var(--u) * 1) calc(var(--u) * 3); background: #ffe14d; border: calc(var(--u) * .5) solid #fff; border-radius: calc(var(--u) * 2.4);
   box-shadow: 0 calc(var(--u) * .8) 0 #b06a10, 0 0 calc(var(--u) * 4) rgba(255, 140, 210, .7); pointer-events: none; z-index: 8; white-space: nowrap; }
@@ -185,3 +179,64 @@ body.portrait #rotate { display: flex; }
 #xhair { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); margin: calc(var(--u) * -1.6) 0 0 calc(var(--u) * -1.6);
   border: calc(var(--u) * .35) solid rgba(255, 240, 200, .85); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); pointer-events: none; }
 #xhair::after { content: ''; position: absolute; left: 50%; top: 50%; width: calc(var(--u) * .6); height: calc(var(--u) * .6); margin: calc(var(--u) * -.3) 0 0 calc(var(--u) * -.3); border-radius: 50%; background: #ffe14d; }
+
+/* ---------- 肥嘟嘟技能键：在「变身」按钮上面。外圈粉色按攒的能量转一圈，攒满了发光、袋鼠跳 ---------- */
+#ui button.b-fat { position: absolute; right: calc(var(--u) * 4); bottom: calc(var(--u) * 41); width: calc(var(--u) * 13); height: calc(var(--u) * 13);
+  padding: 0; border-radius: 50%; border: calc(var(--u) * .4) solid #ffe0f2; cursor: pointer; color: #4a1038; line-height: 1.05;
+  font: 900 calc(var(--u) * 2.3) "Microsoft YaHei", "PingFang SC", sans-serif; box-shadow: 0 0 calc(var(--u) * 1.2) rgba(0, 0, 0, .5);
+  background: radial-gradient(circle, #ffd6ee 0 57%, transparent 58%), conic-gradient(#ff5fb8 calc(var(--p, 0) * 360deg), rgba(40, 20, 40, .75) 0); }
+#ui button.b-fat .roo { display: block; font-size: calc(var(--u) * 4.4); line-height: 1; }
+#ui button.b-fat b { display: block; }
+#ui button.b-fat small { display: block; font-size: calc(var(--u) * 1.7); font-weight: 700; opacity: .8; }
+#ui button.b-fat:disabled { filter: saturate(.6) brightness(.85); }
+#ui button.b-fat.ready { background: radial-gradient(circle at 35% 30%, #fff0f8, #ff9ad4 60%, #ff5fb8); box-shadow: 0 0 calc(var(--u) * 2.6) #ff7cc8, inset 0 0 0 calc(var(--u) * .5) #fff;
+  animation: fatready .45s ease-in-out infinite alternate; }
+#ui button.b-fat.ready .roo { animation: roohop .3s ease-in-out infinite alternate; }
+@keyframes fatready { to { transform: scale(1.08) rotate(-4deg); } }
+
+/* ---------- 竖屏（手机竖着拿）：画面铺满屏幕，界面按竖的排；刘海和底部横条让开（safe-area） ---------- */
+body.portrait #bars { top: calc(var(--u) * 2.5 + env(safe-area-inset-top, 0px)); }
+body.portrait #actinfo { top: calc(var(--u) * 2.2 + env(safe-area-inset-top, 0px)); }
+body.portrait #tools { top: calc(var(--u) * 11 + env(safe-area-inset-top, 0px)); }
+body.portrait #bark { top: calc(var(--u) * 18 + env(safe-area-inset-top, 0px)); max-width: 92%; }
+body.portrait #boss, body.portrait #calm { top: calc(var(--u) * 29 + env(safe-area-inset-top, 0px)); width: calc(var(--u) * 80); }
+body.portrait #combo { top: calc(var(--u) * 40 + env(safe-area-inset-top, 0px)); }
+body.portrait #fatBanner { top: calc(var(--u) * 48 + env(safe-area-inset-top, 0px)); }
+body.portrait #memePop { top: calc(var(--u) * 40 + env(safe-area-inset-top, 0px)); }
+body.portrait #capHero { bottom: calc(var(--u) * 10 + env(safe-area-inset-bottom, 0px)); }
+body.portrait #ui #capMob { bottom: calc(var(--u) * 18.5 + env(safe-area-inset-bottom, 0px)); }
+body.portrait #ui button.b-laugh { bottom: calc(var(--u) * 26 + env(safe-area-inset-bottom, 0px)); }
+body.portrait #ui button.b-fat { bottom: calc(var(--u) * 44 + env(safe-area-inset-bottom, 0px)); }
+/* 升级三选一：三张卡竖着叠 */
+body.portrait #cards h2 { font-size: calc(var(--u) * 5.6); margin-bottom: calc(var(--u) * 4); }
+body.portrait #cards .row { flex-direction: column; gap: calc(var(--u) * 2.6); }
+body.portrait #cards button { width: calc(var(--u) * 86); min-height: 0; padding: calc(var(--u) * 2.6) calc(var(--u) * 3.4); gap: calc(var(--u) * .8); }
+body.portrait #cards q { margin-top: calc(var(--u) * .8); }
+body.portrait #cards small { font-size: calc(var(--u) * 3.4); }
+/* 幕间对话：对话框铺满下面，头像放在对话框上面 */
+body.portrait #dlg { background: linear-gradient(to top, rgba(8,6,12,.85), rgba(8,6,12,0) 62%); }
+body.portrait #dlg .por { height: 30%; bottom: calc(var(--u) * 33 + env(safe-area-inset-bottom, 0px)); }
+body.portrait #dlg.side-left .por { left: 2%; }
+body.portrait #dlg.side-right .por { right: 2%; }
+body.portrait #dlg .box, body.portrait #dlg.side-left .box, body.portrait #dlg.side-right .box { left: 4%; right: 4%; bottom: calc(var(--u) * 6 + env(safe-area-inset-bottom, 0px)); min-height: calc(var(--u) * 24); }
+body.portrait #dlg .txt { font-size: calc(var(--u) * 4.8); }
+body.portrait #dlg .who { font-size: calc(var(--u) * 3.6); }
+body.portrait #dlg .skip { top: calc(var(--u) * 3 + env(safe-area-inset-top, 0px)); font-size: calc(var(--u) * 3.4); }
+/* 名画卡：画在上，文字在下，太长可以上下滑 */
+body.portrait #art { flex-direction: column; justify-content: flex-start; gap: calc(var(--u) * 4); box-sizing: border-box; overflow-y: auto;
+  padding: calc(var(--u) * 8 + env(safe-area-inset-top, 0px)) calc(var(--u) * 5) calc(var(--u) * 8 + env(safe-area-inset-bottom, 0px)); }
+body.portrait #art .frame { height: auto; max-width: 88%; flex-shrink: 0; }
+body.portrait #art .frame img { width: 100%; height: auto; max-height: 46vh; object-fit: contain; }
+body.portrait #art .info { width: 92%; }
+body.portrait #art h2 { font-size: calc(var(--u) * 5.6); }
+body.portrait #art .by, body.portrait #art .where { font-size: calc(var(--u) * 3.6); }
+body.portrait #art ul { font-size: calc(var(--u) * 3.8); }
+body.portrait #art button { font-size: calc(var(--u) * 4.2); }
+/* 开始画面和暂停 */
+body.portrait #title { justify-content: flex-start; padding: calc(var(--u) * 32 + env(safe-area-inset-top, 0px)) calc(var(--u) * 6) 0; box-sizing: border-box; }   /* 字放上半屏，主角站在下面 */
+body.portrait #title h1 { font-size: calc(var(--u) * 9.6); letter-spacing: .06em; white-space: nowrap; }
+body.portrait #title .sub { font-size: calc(var(--u) * 4.2); }
+body.portrait #title .go { font-size: calc(var(--u) * 5.2); }
+body.portrait #title .tip { font-size: calc(var(--u) * 3.4); line-height: 1.6; }
+body.portrait #title .ver { left: 0; right: 0; bottom: calc(var(--u) * 3 + env(safe-area-inset-bottom, 0px)); font-size: calc(var(--u) * 2.8); }
+body.portrait #pause button { font-size: calc(var(--u) * 4.6); }

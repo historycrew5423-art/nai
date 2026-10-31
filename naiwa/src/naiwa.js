@@ -2,8 +2,8 @@
 // 只放和 game.js 无关的零件（贴图、声音、界面、大奶蛙模型），游戏逻辑仍在 game.js。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Rig } from './minions.js';
-import { findSyllables } from './laugh-audio.js';
+import { Rig } from './minions.js?v=20261031n2';
+import { findSyllables } from './laugh-audio.js?v=20261031n2';
 
 export const pick = (list) => list[Math.floor(Math.random() * list.length)];
 export const HAHA_COLORS = ['#ffd94a', '#ff9de0', '#7ef0ff', '#ffffff', '#b6ff6b', '#ffb35c'];

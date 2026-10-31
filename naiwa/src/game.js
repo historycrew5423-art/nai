@@ -9,12 +9,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { Input } from './input.js';
-import { byId, drawCards, baseStats } from './skills.js';
-import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
-import { loadMinions, frameIndex, lungeOffset, SWING_TIME, WALK_RATE, WALK_FRAMES } from './minions.js';
-import { HAHA_GLYPHS, HAHA_COLORS, hahaMaterial, floatText, updateFloats, makeStars, makeLane, placeLane, loadLaugh, playHa, playLaugh, stopLaugh, makeLaughUI, loadBigFrog, bigFrogPose, pick, setLaughOut } from './naiwa.js';
-import { initMixer, loadClips, heroOut, duck, heroSay, heroBusy, holdHero, mobSay, hasClip, whoosh, pop, boing, boom, tone, speak, stopSpeak } from './sfx.js';
+import { Input } from './input.js?v=20261031n2';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031n2';
+import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031n2';
+import { loadMinions, frameIndex, lungeOffset, SWING_TIME, WALK_RATE, WALK_FRAMES } from './minions.js?v=20261031n2';
+import { HAHA_GLYPHS, HAHA_COLORS, hahaMaterial, floatText, updateFloats, makeStars, makeLane, placeLane, loadLaugh, playHa, playLaugh, stopLaugh, makeLaughUI, loadBigFrog, bigFrogPose, pick, setLaughOut } from './naiwa.js?v=20261031n2';
+import { initMixer, loadClips, heroOut, duck, heroSay, heroBusy, holdHero, mobSay, hasClip, whoosh, pop, boing, boom, tone, speak, stopSpeak } from './sfx.js?v=20261031n2';
+import { Pacing, PACE } from './pacing.js?v=20261031n2';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -30,8 +31,13 @@ const PITCH = Math.atan2(CAM.y, CAM.z);             // 场景里烛光贴片朝�
 let camMode = Math.min(2, Math.max(0, Math.round(+Q.get('cam') || 0))), camYaw = Math.PI, camPitch = 0;
 const CAM_NAMES = ['俯视', '第三人称', '第一人称'];
 const FOG = [[17, 33], [13, 36], [9, 32]];   // 每种视角的雾：近处开始、远处全遮住（米）
+// 竖屏（手机竖着拿）：俯视镜头更高、更陡一点（约 55 度，离主角约 22 米），视野按屏幕比例算，左右能看到约 12 米，
+// 同一台手机上人物和横屏一样大
+const CAMP = new THREE.Vector3(0, 18, 12.5), CAMP_D = CAMP.length(), PORTRAIT_HALF_W = 6;
+const FOG_P = [[24, 44], [14, 40], [9, 34]];
+let portrait = false;
 
-// ---------- 画面：固定 16:9 ----------
+// ---------- 画面：横屏固定 16:9；竖屏铺满整个屏幕 ----------
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -43,13 +49,14 @@ const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 80);
 
 let pixelCap = 1.75;   // 清晰度上限；帧数低时自动往下调（见主循环）
 function layout() {
-  const portrait = innerHeight > innerWidth;
+  portrait = innerHeight > innerWidth;
   document.body.classList.toggle('portrait', portrait);
-  const w = Math.min(innerWidth, innerHeight * 16 / 9), h = w * 9 / 16;
+  const w = portrait ? innerWidth : Math.min(innerWidth, innerHeight * 16 / 9), h = portrait ? innerHeight : w * 9 / 16;
   stage.style.width = w + 'px'; stage.style.height = h + 'px';
-  stage.style.setProperty('--u', (h / 100) + 'px');
+  stage.style.setProperty('--u', (Math.min(w, h) / 100) + 'px');   // 界面的尺寸单位：短边的 1%，横屏竖屏的字一样大
   renderer.setPixelRatio(Math.min(devicePixelRatio, pixelCap));
   renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 addEventListener('resize', layout);
 layout();
@@ -456,10 +463,15 @@ const ONE3 = [1, 1, 1];
 // 声音的左右：按怪在镜头里偏左还是偏右（viewYaw 是这一帧镜头的朝向，俯视时是 π）
 let viewYaw = Math.PI;
 const panOf = (dx, dz) => Math.max(-1, Math.min(1, (-dx * Math.cos(viewYaw) + dz * Math.sin(viewYaw)) / 9));
+// 梗的节奏（src/pacing.js）：新梗一个一个上，同一类梗按热度限次数，大招前后安静几秒
+const pace = new Pacing();
+let heatNow = 0;
+// 小怪打人：只有贴身打到罗密欧、而且节奏允许时才叫（叫声主要留给“被打倒”）
 function swingStart(i, t, d) {
   E.swing[i] = SWING_TIME; E.scd[i] = 1.05 + Math.random() * 0.5;
   window.__swings = (window.__swings || 0) + 1;   // 给自动测试统计攻击次数
-  if (!muted && actx && d < 18) mobSay(t.minion, 'attack', { pan: panOf(E.x[i] - player.x, E.z[i] - player.z), dist: d });
+  if (muted || !actx || d > 3 || Math.random() > 0.35 || heroBusy() || !pace.mobOk(time, t.minion, false)) return;
+  if (mobSay(t.minion, 'attack', { pan: panOf(E.x[i] - player.x, E.z[i] - player.z), dist: d })) pace.mobPlayed(time, t.minion, heatNow, t.minion + ' 打人');
 }
 shadowMesh.renderOrder = 0;
 
@@ -546,12 +558,12 @@ const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, movi
 // 闪身步：走满 DODGE_EVERY 米自动往旁边闪一下（左右轮流），闪的时候不挨打、身后留残影；电脑上空格键也能闪
 const DODGE_EVERY = 6, DODGE_DIST = 2.4, DODGE_TIME = 0.2;
 const dodge = { t: 0, vx: 0, vz: 0, side: 1, cd: 0, walk: 0, ghostT: 0, voiceAt: -9, want: false, n: 0 };
-// 肥嘟嘟：累计喷满 5 秒，袋鼠喊“你的胆子真是肥嘟嘟的！”，周围的小怪被吹成气球飘起来“啵”地爆掉
-const FAT_TIME = 5, FAT_R = 16;   // 16 米：整个画面里的小怪
+// 肥嘟嘟（技能键）：喷字攒能量，攒满 10 秒亮起🦘按钮（电脑按 F），按下去袋鼠喊“你的胆子真是肥嘟嘟的！”，画面里的小怪被吹成气球“啵”地爆掉
+const FAT_TIME = 10, FAT_R = 16;   // 16 米：整个画面里的小怪
 const FDD_SAY = 'Nee duh dahn-zuh, jen shur, fay doo doo duh!';   // 老外念“你的胆子真是肥嘟嘟的”：横幅下面的小字幕，也是备用朗读的文本
-let spitT = 0, fatBannerT = 0, fats = 0;
-// 喷字：每 3 口里有 1 口是特殊字（跌/塞/水/噗/嘎），特殊字会喊对应的奶龙口头禅
-let volley = 0, wordVoiceAt = -9;
+let spitT = 0, fatBannerT = 0, fats = 0, fatHintSaid = false;
+// 喷字：每 3 口里有 1 口是特殊字（第一幕按 PACE.wordsAt 一个一个解锁），特殊字第一次出现时喊对应的奶龙口头禅，之后按节奏偶尔喊
+let volley = 0;
 // 连杀计数（短视频那种“x10”），开场梗和第一次见到每种怪时的介绍
 let combo = 0, comboT = 0, bestCombo = 0, autoLaughDone = false, coldOpenDone = false;
 const seenKinds = new Set(), introQueue = [];
@@ -583,8 +595,9 @@ function resetRun() {
   player.kx = player.kz = 0; laughCd = 8.5; laughHintSaid = false; endLaugh();   // 第一幕第 8.5 秒自动变身一次，给玩家看看
   tyMode = 'stalk'; lane.visible = false; tyStars.visible = false;
   autoLaughDone = coldOpenDone = false; seenKinds.clear(); introQueue.length = 0; introT = 0;
-  combo = comboT = bestCombo = 0; spitT = 0; fats = 0; volley = 0; corpses.length = 0;
+  combo = comboT = bestCombo = 0; spitT = 0; fats = 0; fatHintSaid = false; volley = 0; corpses.length = 0;
   dodge.t = dodge.cd = dodge.walk = 0; dodge.n = 0;
+  pace.reset();
 }
 
 // ---------- 怪的生成和数量（第一幕：开局很简单，慢慢变多） ----------
@@ -602,20 +615,24 @@ function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   E.swing[i] = 0; E.scd[i] = Math.random() * 0.8; E.stun[i] = E.slow[i] = E.puff[i] = 0;
   E.hp[i] = t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0);
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
-  // 每种梗怪第一次出现：排队播它的招牌叫声 + 字幕（一只一只来，不叠在一起）
+  // 每种梗怪第一次出现：记下来，等它走进画面再播它的招牌叫声 + 字幕（一种一种来，不叠在一起）
   if (t.minion && !seenKinds.has(t.minion) && (phase === 'fight' || phase === 'levelup')) { seenKinds.add(t.minion); introQueue.push(t.minion); }
   return i;
 }
-// 第一幕的小怪组合：刀盾狗、香蕉猫、OIIA 猫、咕咕嘎嘎企鹅混着来
-function act1Pick() { const r = Math.random(); return r < 0.34 ? T.lute : r < 0.6 ? T.banana : r < 0.76 ? T.oiia : T.birdhead; }
-// 冷开场：一开打就从四面走进画面一群梗怪（就在镜头里，不用等它们从屏幕外走过来）
+// 第一幕的小怪：按 PACE.kindsAt 一种一种上新——开头只有刀盾狗，第 7 秒企鹅，第 18 秒香蕉猫，第 28 秒 OIIA 猫
+const ACT1_MIX = [['dog', T.lute, 0.4], ['penguin', T.birdhead, 0.2], ['banana', T.banana, 0.25], ['oiia', T.oiia, 0.15]];
+function act1Pick() {
+  const open = ACT1_MIX.filter(([k]) => pace.kindOpen(k, 1, actTime));
+  let r = Math.random() * open.reduce((s, m) => s + m[2], 0);
+  for (const [, ty, w] of open) { r -= w; if (r <= 0) return ty; }
+  return T.lute;
+}
+// 冷开场：一开打就有一小队刀盾狗从左上走进画面（只有一种怪，先让玩家看清楚、打爽）
 function coldOpen() {
   coldOpenDone = true;
   const group = (type, a, n, d) => { for (let k = 0; k < n; k++) spawnEnemy(type, a + (k - (n - 1) / 2) * 0.22, d + Math.random() * 1.2); };
-  group(T.birdhead, -2.3, 4, 9.5);   // 左上：企鹅
-  group(T.banana, 1.45, 3, 8.5);     // 右边：香蕉猫
-  group(T.oiia, 0.25, 2, 8);         // 下边：OIIA 猫
-  group(T.lute, -1.5, 3, 9);         // 左边：刀盾狗
+  group(T.lute, -2.2, 4, 9);   // 左上
+  group(T.lute, 1.6, 2, 8.5);  // 右边
 }
 const lowHp = () => player.hp < maxHp() * 0.35;
 function director(dt) {
@@ -627,11 +644,12 @@ function director(dt) {
   const target = act1Target(actTime) * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点
   spawnAcc += dt * (actTime < 20 ? 5 : 6);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(act1Pick()); }
-  // 鸟嘴面具客人：第 25 秒起，每 6 秒从一个方向冲来一小群
-  if (actTime > 25 + birdWaves * 6 && actTime < ACT_LEN - 3) {
+  // 咕咕嘎嘎企鹅：第 7 秒第一群（从一个方向冲来），之后每 9 秒一群
+  const penguinAt = PACE.kindsAt.penguin;
+  if (actTime > penguinAt + birdWaves * 9 && actTime < ACT_LEN - 3) {
     birdWaves++;
     const a = Math.random() * Math.PI * 2;
-    for (let k = 0; k < 6 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
+    for (let k = 0; k < 4 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, (birdWaves === 1 ? 13 : 17) + Math.random() * 3);
   }
   if (actTime > 38 && E.n < target + 3 && Math.random() < dt * 0.6) spawnEnemy(T.drum);
 }
@@ -651,6 +669,7 @@ function director2(dt) {
     dogSpawned = true; bossChargeCd = 4;
     spawnEnemy(T.cerberus, Math.PI, 15);
     bark(BOSS_LINES.dogIn.who, BOSS_LINES.dogIn.text);
+    pace.quiet(time, PACE.quietAfterBoss); pace.log(time, '三头犬登场');   // Boss 登场：先安静两秒，让人看清它
   }
 }
 function bossIndex() { for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].boss) return i; return -1; }
@@ -681,6 +700,7 @@ function director3(dt) {
     tyMode = 'stalk'; tyT = 0; tyCd = 2.5; tyChain = 0; tySaid = false; lane.visible = false;
     spawnEnemy(T.tybalt, Math.PI, 14);
     bark(BOSS_LINES.tybaltIn.who, BOSS_LINES.tybaltIn.text);
+    pace.quiet(time, PACE.quietAfterBoss); pace.log(time, '提伯尔特登场');
     setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.tybaltIn2.who, BOSS_LINES.tybaltIn2.text); }, 2400);
   }
 }
@@ -704,9 +724,14 @@ function addCorpse(kind, x, z, ux, uz, t) {
 function minionDown(i, t) {
   const dx = E.x[i] - player.x, dz = E.z[i] - player.z, d = Math.hypot(dx, dz) || 1;
   addCorpse(t.minion, E.x[i], E.z[i], dx / d, dz / d, t);
-  if (muted || !actx) return;
+  if (muted || !actx || d > 14 || heroBusy()) return;   // 画面外的不叫；主角正在说话（口头禅、笑声）时不插嘴，第一次的梗留到下一只再叫
+  // 这种怪第一次被打倒：一定叫（新梗）；之后按节奏，隔几秒才轮到一只
+  const first = !pace.firstDeath.has(t.minion);
+  if (!pace.mobOk(time, t.minion, first)) return;
   const rate = t.key === 'drum' ? 0.82 : t.key === 'shade' ? 1.18 : t.key === 'horn' ? 1.08 : 1;   // 大狗声音低一点，亡魂尖一点
-  if (mobSay(t.minion, 'death', { pan: panOf(dx, dz), dist: d, rate })) {
+  if (mobSay(t.minion, 'death', { pan: panOf(dx, dz), dist: d, rate, priority: first ? 3 : 2 })) {
+    pace.firstDeath.add(t.minion); pace.mobPlayed(time, t.minion, heatNow, t.minion + (first ? ' 第一次被打倒' : ' 被打倒'));
+    if (first) { const q = introQueue.indexOf(t.minion); if (q >= 0) introQueue.splice(q, 1); }   // 还没登场就先被打倒叫过了：不用再登场一次
     const M = MEME[t.minion];
     mobCaption(pick(M.die), M.color);
     floatText(scene, M.pop, E.x[i], 2.3, E.z[i], { color: M.color, stroke: '#1a1020', h: 0.62, life: 0.9 });
@@ -716,9 +741,9 @@ function minionDown(i, t) {
 function bumpCombo() {
   combo++; comboT = 2.6; if (combo > bestCombo) bestCombo = combo;
   const el = $('#combo');
-  el.querySelector('b').textContent = combo; show(el, combo >= 3);
+  el.querySelector('b').textContent = combo; show(el, combo >= 5);
   el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-  if (combo === 10 || combo === 25 || combo === 50 || (combo >= 100 && combo % 100 === 0)) {
+  if (combo === 20 || combo === 50 || (combo >= 100 && combo % 100 === 0)) {   // 连杀的大字和小号声：只在 20、50、100……时出，别太勤
     heroCaption(combo >= 50 ? `哈哈哈哈哈 ×${combo}！` : `${combo} 连哈！`, combo >= 50 ? '#ff8ae0' : '#ffe14d');
     shake = Math.max(shake, 0.2);
     if (!muted) { tone(784, 0.05, 0.18, 'square'); setTimeout(() => tone(988, 0.05, 0.18, 'square'), 90); setTimeout(() => tone(1319, 0.06, 0.3, 'square'), 180); }
@@ -889,11 +914,10 @@ ui.innerHTML = `
 <div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">张嘴喷“哈”打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动喷“哈”）· V 变身大奶蛙捧腹大笑 · 空格 闪身步 · C 切换第一/第三人称</p><p class="ver">${VERSION} 奶蛙缝合版：勇者奶蛙的抽象玩法</p></div>
+<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">张嘴喷“哈”打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">手机横屏竖屏都能玩：手指拖着走，不碰也会自动喷“哈”；攒满点🦘肥嘟嘟、点「变身」捧腹大笑<br>电脑：WASD 走 · 鼠标瞄 · F 肥嘟嘟 · V 变身 · 空格 闪身步 · C 换视角</p><p class="ver">${VERSION} 奶蛙缝合版：勇者奶蛙的抽象玩法</p></div>
 <div id="capMob" class="cap hide"></div>
 <div id="capHero" class="cap hide"></div>
 <div id="combo" class="hide"><b>0</b><span>连哈</span></div>
-<div id="fat" class="hide"><b>肥嘟嘟</b><div class="fatbar"><i></i></div></div>
 <div id="fatBanner" class="hide"><span class="roo">🦘</span><div><b>你的胆子真是肥嘟嘟的！</b><small>Nee duh dahn-zuh, jen shur, fay doo doo duh!</small></div></div>
 <div id="xhair" class="hide"></div>
 <div id="tools" class="hide"><button class="b-cam">视角 俯视</button><button class="b-pause">暂停</button><button class="b-mute">声音 开</button></div>
@@ -905,10 +929,16 @@ const show = (el, on = true) => el.classList.toggle('hide', !on);
 const laughBtn = document.createElement('button'); laughBtn.className = 'b-laugh hide';
 ui.appendChild(laughBtn);
 laughBtn.addEventListener('click', (e) => { e.stopPropagation(); startLaugh(); });
+// 肥嘟嘟按钮在变身按钮上面：一圈粉色表示攒了多少，攒满了发光、袋鼠跳。电脑上按 F
+const fatBtn = document.createElement('button'); fatBtn.className = 'b-fat hide';
+fatBtn.innerHTML = '<span class="roo">🦘</span><b>肥嘟嘟</b><small></small>';
+ui.appendChild(fatBtn);
+fatBtn.addEventListener('click', (e) => { e.stopPropagation(); tryFeidudu(); });
 // 点完按钮马上让它失去焦点：不然之后按空格闪身步，会把刚点过的按钮（视角、声音）又按一次
 ui.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); }, true);
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyV' && !e.repeat) startLaugh();
+  if (e.code === 'KeyF' && !e.repeat) tryFeidudu();
   if (e.code === 'KeyC' && !e.repeat && (phase === 'fight' || phase === 'title')) setCamMode((camMode + 1) % 3);
   if (e.code === 'Space' && phase === 'fight') { e.preventDefault(); if (!e.repeat) dodge.want = true; }   // 空格闪身步（不让空格去点按钮）
 });
@@ -1187,10 +1217,15 @@ function step(dt) {
   const mv = input.getMove();
   const canMove = fighting || phase === 'title';
   const third = camMode > 0 && fighting;
-  if (third) {   // 转身：Q/E 键；手机上右手左右拖（鼠标锁定时在 mousemove 里转）
+  if (third) {   // 转身：Q/E 键；手机上右手（竖屏是第二根手指）左右拖；鼠标锁定时在 mousemove 里转
     const k = input.keys;
     camYaw += ((k.has('KeyQ') ? 1 : 0) - (k.has('KeyE') ? 1 : 0)) * 2.4 * dt;
     if (input.aim.active) camYaw -= input.aim.x * 2.6 * dt;
+    else if (Math.hypot(input.touchMove.x, input.touchMove.y) > 0.2 && document.pointerLockElement !== canvas) {
+      // 手机上只用一根手指走路：镜头慢慢转到身后（往右推就会一边走一边往右拐）；往回走时不转
+      let d = Math.atan2(player.mvx, player.mvz) - camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.abs(d) < 2.2) camYaw += d * Math.min(1, dt * 1.6);
+    }
   }
   const yawM = third ? camYaw : Math.PI, fx = Math.sin(yawM), fz = Math.cos(yawM);
   const wmx = fx * -mv.y - fz * mv.x, wmz = fz * -mv.y + fx * mv.x;
@@ -1335,9 +1370,12 @@ function step(dt) {
     if (t >= 0) { const dx = E.x[t] - player.x, dz = E.z[t] - player.z, d = Math.hypot(dx, dz) || 1; aim = { x: dx / d, z: dz / d }; } }
   if (aim) { player.aimX = aim.x; player.aimZ = aim.z; }
 
-  // 开火。每 3 口里有 1 口喷特殊字（跌/塞/水/噗/嘎），特殊字打中有不同效果，并喊对应的奶龙口头禅
+  // 热度：这一刻梗可以多密（第一幕从冷到热；Boss 在场、连杀多时更热），见 src/pacing.js
+  heatNow = pace.heat(act, actTime, combo, dogSpawned && !dogDown);
+
+  // 开火。每 3 口里有 1 口喷特殊字（第一幕按 PACE.wordsAt 一个一个解锁），特殊字打中有不同效果
   fireCd -= dt;
-  if (aim && laughT <= 0) spitT += dt;   // 肥嘟嘟：累计喷满 5 秒触发
+  if (aim && laughT <= 0) spitT = Math.min(FAT_TIME, spitT + dt);   // 肥嘟嘟：喷字攒能量，攒满就亮起🦘按钮
   if (aim && fireCd <= 0 && laughT <= 0) {   // 捧腹大笑时不喷字，靠声波
     fireCd = 1 / (3.4 * stats.rateMul);
     volley++;
@@ -1348,19 +1386,32 @@ function step(dt) {
     const en = stats.echo >= 3 ? Math.min(3, stats.projectiles) : 1;
     if (stats.echo >= 1) fan(base + Math.PI, en);
     if (stats.echo >= 2) { fan(base + Math.PI / 2, en); fan(base - Math.PI / 2, en); }
-    // 声音：特殊字喊口头禅（最多 1.5 秒一句）；其他时候每喷一次播一个“哈”（从奶蛙笑声里切出来的音节）
-    // 主角正在喊口头禅时不放“哈”，一句话说完整；笑声还没加载好时退回原来的弹琴声
+    // 声音：每喷一口播一个“哈”（从奶蛙笑声里切出来的音节），这是主角的基本声音，一直都有。
+    // 特殊字：第一次喷出来时一定喊它的口头禅（新梗），之后按节奏隔七到十几秒才喊一次；喊的时候不放“哈”，一句话说完整
     if (!muted && actx) {
-      if (G.voice && time - wordVoiceAt > 1.5 && !heroBusy() && hasClip(G.voice)) { wordVoiceAt = time; heroSay(G.voice, { volume: 1, duckTo: 0.25 }); heroCaption(G.say, G.color); }
-      else if (!heroBusy() && !playHa(actx)) pluck(MELODY[noteIdx++ % MELODY.length], 0.035, 0.3);
+      const first = G.voice && !pace.firstWord.has(g);
+      if (G.voice && !heroBusy() && hasClip(G.voice) && pace.lineOk(time, first)) {
+        pace.firstWord.add(g); pace.linePlayed(time, heatNow, G.say + (first ? '（第一次）' : ''));
+        heroSay(G.voice, { volume: 1, duckTo: 0.25 }); heroCaption(G.say, G.color);
+      } else if (!heroBusy() && !playHa(actx)) pluck(MELODY[noteIdx++ % MELODY.length], 0.035, 0.3);
     }
   }
-  if (fighting && spitT >= FAT_TIME && laughT <= 0) feidudu();
+  // 肥嘟嘟第一次攒满：叮一声、提示按钮（之后就靠按钮发光）；自动测试时攒满直接放
+  if (fighting && spitT >= FAT_TIME && !fatHintSaid) {
+    fatHintSaid = true;
+    bark('mercutio', '肥嘟嘟攒满了！快点右边的🦘袋鼠（电脑按 F）！');
+    if (!muted) { tone(1047, 0.05, 0.25, 'sine'); setTimeout(() => tone(1568, 0.05, 0.35, 'sine'), 110); }
+  }
+  if (AUTO && fighting && spitT >= FAT_TIME && laughT <= 0) feidudu();
 
-  // 第一次见到每种梗怪：一只一只播它的招牌叫声，配字幕（间隔 1.25 秒，不叠在一起）
+  // 第一次见到每种梗怪：等它走进画面（离罗密欧 11 米内），再播它的招牌叫声，配字幕；一种一种来，大招期间先等着
+  while (introQueue.length && pace.firstDeath.has(introQueue[0])) introQueue.shift();
   if (introQueue.length) {
     introT -= dt;
-    if (introT <= 0) { introT = 1.25; introduce(introQueue.shift()); }
+    const kind = introQueue[0];
+    let near = false;
+    for (let i = 0; i < E.n && !near; i++) if (TYPES[E.type[i]].minion === kind && Math.hypot(E.x[i] - player.x, E.z[i] - player.z) < 11) near = true;
+    if (introT <= 0 && near && !heroBusy() && pace.mobOk(time, kind, true)) { introT = 1.25; introduce(introQueue.shift()); }
   }
 
   // 变身大奶蛙：捧腹大笑 3.4 秒，每 0.62 秒一圈全屏声波，期间不掉血。第一幕第 8.5 秒自动变身一次，演示给玩家看
@@ -1436,8 +1487,18 @@ function shoot(ang, g = 0) {
   if (fx === 'bounce') B.bounce[i] += 2;   // 嘎：弹到旁边的怪身上，连弹两次
   if (fx === 'pierce') { B.pierce[i] += 4; B.size[i] *= 1.2; B.life[i] = 1.3; }   // 噗：大泡泡，一路穿过去
 }
-// 特殊字轮流出：嘎（弹）多一点，其余四种一样多
-function pickWord() { const r = Math.random(); return r < 0.24 ? 2 : r < 0.43 ? 3 : r < 0.62 ? 4 : r < 0.81 ? 5 : 6; }
+// 特殊字：只从已经解锁的字里挑（第一幕按 PACE.wordsAt 一个一个上新）；刚解锁的字先喷一口，让玩家看到它
+const WORD_W = { 2: 0.24, 3: 0.19, 4: 0.19, 5: 0.19, 6: 0.19 };   // 嘎（弹）多一点，其余四种一样多
+const shownWords = new Set();
+function pickWord() {
+  const open = Object.keys(WORD_W).map(Number).filter((g) => pace.wordOpen(g, act, actTime));
+  if (!open.length) return Math.random() < 0.6 ? 0 : 1;
+  const fresh = pace.isQuiet(time) ? undefined : open.find((g) => !shownWords.has(g));   // 大招安静的时候先不上新字，等安静完再亮相
+  if (fresh !== undefined) { shownWords.add(fresh); return fresh; }
+  let r = Math.random() * open.reduce((s, g) => s + WORD_W[g], 0);
+  for (const g of open) { r -= WORD_W[g]; if (r <= 0) return g; }
+  return open[open.length - 1];
+}
 // 特殊字打中之后：跌 = 打趴 1.5 秒；塞 = 炸开一圈；水 = 把一片怪冲开并减速
 let boomAt = 0, popAt = 0;
 function wordHit(fx, hit, hid, hx, hz, ux, uz, dmg) {
@@ -1474,25 +1535,35 @@ function startDodge(moving) {
   dodge.vx = (sx * 0.9 + fx * 0.3) * v; dodge.vz = (sz * 0.9 + fz * 0.3) * v;
   dodge.t = DODGE_TIME; dodge.cd = 0.5; dodge.walk = 0; dodge.ghostT = 0; dodge.n++;
   player.hurtCd = Math.max(player.hurtCd, DODGE_TIME + 0.15);
-  floatText(scene, '闪身步！', player.x, 2.7, player.z, { color: '#7ef0ff', stroke: '#06283a', h: 0.72, life: 0.8 });
-  if (!muted && actx) {
-    whoosh(0.5);
-    if (time - dodge.voiceAt > 2.6 && !heroBusy()) { dodge.voiceAt = time; heroSay('hero.shanshen', { volume: 0.95, duckTo: 0.3 }); heroCaption('闪身步！', '#7ef0ff'); }
+  // 每次闪都有“嗖”和残影；喊“闪身步！”的原声和大字只在第一次、之后隔十几秒才来一次
+  const voiced = !muted && actx && !heroBusy() && (dodge.n === 1 || pace.dodgeLineOk(time));
+  if (!muted && actx) whoosh(0.35);
+  if (voiced) {
+    pace.dodgeLinePlayed(time);
+    heroSay('hero.shanshen', { volume: 0.95, duckTo: 0.3 }); heroCaption('闪身步！', '#7ef0ff');
+    floatText(scene, '闪身步！', player.x, 2.7, player.z, { color: '#7ef0ff', stroke: '#06283a', h: 0.72, life: 0.8 });
   }
   window.__dodges = dodge.n;
 }
 // 肥嘟嘟：袋鼠喊“你的胆子真是肥嘟嘟的！”，画面里的小怪全被吹成粉色气球飘起来，一个接一个“啵”地爆掉
+// 按🦘按钮或 F 键：攒满了才能放；捧腹大笑时不能放（两个大招不叠在一起）
+function tryFeidudu() {
+  if (phase !== 'fight' || laughT > 0 || spitT < FAT_TIME) return false;
+  feidudu(); return true;
+}
 function feidudu() {
   spitT = 0; fats++; fatBannerT = 2.4;
   const el = $('#fatBanner'); show(el); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
   heroCaption('你的胆子真是肥嘟嘟的！', '#ffb3e6');
   // 老外口音：录好的 feidudu.mp3（英语声音念中文拼读）；说完再跟一声尖一点的“Fay doo doo!”，越听越上头
-  // 录音没加载上时，用浏览器里的英语声音现场念拼读，一样是老外口音
+  // 录音没加载上时，用浏览器里的英语声音现场念拼读，一样是老外口音。喊完之后安静一会儿，只听气球一个个“啵”
+  let len = 3;
   if (!muted && actx) {
-    const len = hasClip('hero.feidudu') ? heroSay('hero.feidudu', { volume: 1.7, duckTo: 0.12 }) : speak(FDD_SAY);   // 录音本身偏小声，放大一点
+    len = hasClip('hero.feidudu') ? heroSay('hero.feidudu', { volume: 1.7, duckTo: 0.12 }) : speak(FDD_SAY);   // 录音本身偏小声，放大一点
     if (hasClip('hero.feidudu.echo')) setTimeout(() => { if (!muted && phase === 'fight') heroSay('hero.feidudu.echo', { volume: 1.5, rate: 1.08, duckTo: 0.18, cut: false }); }, (len + 0.08) * 1000);
     boing(0.32);
   }
+  pace.quiet(time, len + 0.9 + PACE.quietAfterFat); pace.log(time, '肥嘟嘟');
   let n = 0;
   for (let i = 0; i < E.n; i++) {
     const t = TYPES[E.type[i]], dx = E.x[i] - player.x, dz = E.z[i] - player.z;
@@ -1519,7 +1590,8 @@ function introduce(kind) {
   for (let i = 0; i < E.n; i++) if (TYPES[E.type[i]].minion === kind) { const q = (E.x[i] - player.x) ** 2 + (E.z[i] - player.z) ** 2; if (q < bd) { bd = q; idx = i; } }
   mobCaption(M.intro, M.color);
   if (idx >= 0) floatText(scene, M.intro.length > 9 ? M.pop : M.intro, E.x[idx], 2.6, E.z[idx], { color: M.color, stroke: '#1a1020', h: 0.78, life: 1.3 });
-  if (!muted && actx) mobSay(kind, 'attack', { pan: idx >= 0 ? panOf(E.x[idx] - player.x, E.z[idx] - player.z) : 0, dist: idx >= 0 ? Math.sqrt(bd) : 6, priority: 3 });
+  if (!muted && actx && mobSay(kind, 'attack', { pan: idx >= 0 ? panOf(E.x[idx] - player.x, E.z[idx] - player.z) : 0, dist: idx >= 0 ? Math.sqrt(bd) : 6, priority: 3 })) pace.mobPlayed(time, kind, heatNow, kind + ' 登场');
+  else pace.log(time, kind + ' 登场（没声音）');
   window.__intros = (window.__intros || 0) + 1;
 }
 // 第一/第三人称的自动瞄准：按住鼠标左键就往准星方向喷；否则打前方 57 度扇形里最近的怪（Boss 优先），背后贴身的怪也会顺手喷
@@ -1549,6 +1621,7 @@ function startLaugh(force = false) {
   laughUI.showMeme(force ? '笑着复活！' : '捧腹大笑！'); laughUI.flash(); shake = Math.max(shake, 0.35);
   // 变身：桌宠笑声连放两遍，配捧腹大笑动图；复活：放更长更响的爆笑原声
   if (!muted) { playLaugh(actx, LAUGH_TIME + 0.4, force ? 'long' : 'short'); holdHero(LAUGH_TIME + 0.4); }
+  pace.quiet(time, LAUGH_TIME + PACE.quietAfterLaugh); pace.log(time, force ? '笑着复活' : '捧腹大笑');   // 笑的时候和笑完之后，小怪不叫、口头禅不喊
   ring(player.x, player.z, 3, 0.5);
   if (!force) { floatText(scene, '变身！', player.x, 3.4, player.z, { color: '#ffe36b', h: 1.1 }); bark('romeo', '绷不住了！哈哈哈哈哈哈！'); }
   window.__laughs = (window.__laughs || 0) + 1;
@@ -1708,19 +1781,24 @@ function updateCamera(dt) {
   const live = phase === 'fight' || phase === 'levelup' || phase === 'paused';
   const mode = live ? camMode : 0;
   const big = !!(bigFrog && bigFrog.group.visible);
+  // 视野（上下张角）：横屏一直是 45 度；竖屏屏幕窄，俯视时按屏幕比例放大到左右能看到约 13 米，第一/第三人称用 78 度
+  const fov = !portrait ? 45 : mode === 0 ? Math.min(72, Math.max(42, 2 * Math.atan(PORTRAIT_HALF_W / CAMP_D / camera.aspect) * 180 / Math.PI)) : 78;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (mode === 0) {
     const want = phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : laughT > 0 ? 0.78 : 1;   // 捧腹大笑时镜头拉近一点
     camDist += (want - camDist) * Math.min(1, dt * 2.2);
-    const panX = phase === 'title' || phase === 'over' ? 5.5 : 0;   // 开始和结束画面：镜头往右平移，主角站到画面左边，别挡住标题
-    camTarget.set(player.x + panX + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
+    const C = portrait ? CAMP : CAM, menu = phase === 'title' || phase === 'over';
+    // 开始和结束画面：横屏时镜头往右平移，主角站到画面左边；竖屏时往上平移，主角站到标题下面
+    const panX = menu && !portrait ? 5.5 : 0, panZ = menu && portrait ? -7.5 : 0;
+    camTarget.set(player.x + panX + C.x * camDist, C.y * camDist, player.z + panZ + C.z * camDist);
     camera.position.lerp(camTarget, Math.min(1, dt * 7));
-    camera.lookAt(camera.position.x - CAM.x * camDist, phase === 'actEnd' ? 0.9 : 0, camera.position.z - CAM.z * camDist);
+    camera.lookAt(camera.position.x - C.x * camDist, phase === 'actEnd' ? 0.9 : 0, camera.position.z - C.z * camDist);
     viewYaw = Math.PI;
   } else {
     const fx = Math.sin(camYaw), fz = Math.cos(camYaw), rx = -fz, rz = fx;   // r：镜头的右手方向
     if (mode === 1 || big) {
-      // 第三人称：越过右肩看（主角在画面偏左，准星不被脑袋挡住）；变身大奶蛙时退远、升高，看全身
-      const dist = big ? 7.4 : 5.0, side = big ? 0 : 0.95, h = (big ? 4.0 : 2.45) - camPitch * 1.6;
+      // 第三人称：越过右肩看（主角在画面偏左，准星不被脑袋挡住）；变身大奶蛙时退远、升高，看全身。竖屏再退远一点
+      const pk = portrait ? 1.4 : 1, dist = (big ? 7.4 : 5.0) * pk, side = big ? 0 : portrait ? 0.5 : 0.95, h = (big ? 4.0 : 2.45) * pk - camPitch * 1.6;
       camTarget.set(player.x - fx * dist + rx * side, Math.max(0.8, h), player.z - fz * dist + rz * side);
       camera.position.lerp(camTarget, Math.min(1, dt * 9));
       camLook.set(player.x + fx * 4 + rx * side, (big ? 1.6 : 1.2) + camPitch * 2.6, player.z + fz * 4 + rz * side);
@@ -1733,7 +1811,7 @@ function updateCamera(dt) {
     camera.lookAt(camLook);
     viewYaw = camYaw;
   }
-  const fg = FOG[mode];
+  const fg = (portrait ? FOG_P : FOG)[mode];
   scene.fog.near = fg[0]; scene.fog.far = fg[1];
   if (shake > 0) {   // 冲撞、撞墙、捧腹大笑时镜头抖一下
     const k = mode === 2 && !big ? 0.35 : 1;
@@ -1884,8 +1962,15 @@ function draw(dt) {
   if (capMobT > 0) { capMobT -= dt; if (capMobT <= 0) show($('#capMob'), false); }
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) { combo = 0; show($('#combo'), false); } }
   if (fatBannerT > 0) { fatBannerT -= dt; if (fatBannerT <= 0) show($('#fatBanner'), false); }
-  show($('#fat'), inFight);
-  if (inFight) { const f = Math.min(1, spitT / FAT_TIME); $('#fat i').style.width = (f * 100) + '%'; $('#fat').classList.toggle('full', f > 0.85); }
+  // 肥嘟嘟按钮：外圈按攒的能量变粉，攒满了发光；捧腹大笑时先灰着
+  show(fatBtn, inFight);
+  if (inFight) {
+    const f = Math.min(1, spitT / FAT_TIME), ready = f >= 1 && laughT <= 0 && phase === 'fight';
+    fatBtn.style.setProperty('--p', f.toFixed(3));
+    fatBtn.classList.toggle('ready', ready); fatBtn.disabled = !ready;
+    const s = ready ? '点我！· F' : `${Math.floor(f * 100)}%`;
+    if (fatBtn.lastChild.textContent !== s) fatBtn.lastChild.textContent = s;
+  }
 
   // 界面数字
   if (phase === 'fight' || phase === 'levelup') {
@@ -1936,6 +2021,8 @@ window.__game = {
   get spitT() { return spitT; }, set spitT(v) { spitT = v; }, get fats() { return fats; }, get combo() { return combo; }, get bestCombo() { return bestCombo; },
   get dodges() { return dodge.n; }, get corpses() { return corpses.length; }, get minionKinds() { return minionMeshes ? Object.keys(minionMeshes) : []; },
   get heroRot() { return hero ? hero.rotation.y : 0; }, get ghostsVisible() { return ghosts.filter((g) => g.g.visible).length; },
+  // 梗的节奏：每个出声的梗 [时间, 是什么]，和这一刻的热度；肥嘟嘟按钮
+  get gags() { return pace.events; }, get heat() { return heatNow; }, tryFeidudu, get portrait() { return portrait; },
 };
 
 // ---------- 主循环 ----------
@@ -1944,7 +2031,6 @@ let last = performance.now(), frames = 0, fpsT = last, slowSecs = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(1 / 30, (now - last) / 1000); last = now;
-  if (document.body.classList.contains('portrait')) return;
   if (slowmo > 0) { if (phase !== 'levelup') slowmo -= dt; dt *= 0.25; }   // 慢动作（升级前、茂丘西奥倒下时）按真实时间倒数
   if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead' && phase !== 'paused') step(dt);
   else if (phase === 'levelup' && slowmo > 0) step(dt);

@@ -67,12 +67,14 @@ export const SCENES = {
 };
 
 // 打斗中的喊话：第一幕按时间（秒）触发
+// 缝合版：小怪和喷字是一样一样“上新”的（时间见 src/pacing.js 的 PACE），喊话提前一点预告下一个梗
 export const ACT1_LINES = [
   { t: 0.6, who: 'romeo', text: '哈？卡普莱特家的舞会上怎么全是表情包？' },
-  { t: 3.4, who: 'mercutio', text: '两家的仇恨附在表情包上了！张嘴喷它们！' },
-  { t: 6.2, who: 'mercutio', text: '左手拖着走，右手拖着瞄；不碰也会自己喷。' },
-  { t: 12.5, who: 'mercutio', text: '走几步会自动闪身步！电脑上按空格也能闪。' },
-  { t: 18, who: 'mercutio', text: '一大群咕咕嘎嘎要冲过来了，别一只一只打！', tag: 'warnBird' },
+  { t: 3.2, who: 'mercutio', text: '仇恨附在表情包上了！手指拖着走，张嘴喷它们！' },
+  { t: 6.2, who: 'mercutio', text: '一大群咕咕嘎嘎冲过来了！', tag: 'warnBird' },
+  { t: 16.8, who: 'mercutio', text: '香蕉猫哭着冲过来了……别心软！' },
+  { t: 22.5, who: 'mercutio', text: '走几步会自动闪身步，电脑上按空格也能闪。' },
+  { t: 27, who: 'mercutio', text: '那只圆滚滚的猫……要转起来了！' },
   { t: 34, who: 'tybalt', text: '这声音……是蒙太古家的小子！', tag: 'tybalt' },
   { t: 37, who: 'mercutio', text: '别理那头牛，先活下来。' },
 ];

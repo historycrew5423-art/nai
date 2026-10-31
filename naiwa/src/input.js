@@ -1,5 +1,6 @@
 // 双摇杆输入。
-// 手机：左半屏控制移动，右半屏控制瞄准；手指按下的地方就是摇杆中心。
+// 手机横屏：左半屏控制移动，右半屏控制瞄准；手指按下的地方就是摇杆中心。
+// 手机竖屏：第一根手指不管按在哪里都是移动（一只手就能玩，不碰会自动瞄准），同时按下的第二根手指是瞄准。
 // 电脑：WASD 或方向键移动，鼠标指向哪里就往哪里打。
 
 const RADIUS = 60; // 摇杆能拉开的最大距离（像素）
@@ -37,10 +38,12 @@ export class Input {
   onStart(e) {
     this.mouse.active = false;
     let onButton = false;
+    const portrait = innerHeight > innerWidth;
     for (const t of e.changedTouches) {
       if (t.target.closest && t.target.closest('button, [data-ui]:not(.hide)')) { onButton = true; continue; } // 按钮和对话框、选卡这些界面：照常点击，不当成摇杆
-      const side = t.clientX < innerWidth / 2 ? 'left' : 'right';
-      if ([...this.touches.values()].some((s) => s.side === side)) continue;
+      const used = [...this.touches.values()].map((s) => s.side);
+      const side = portrait ? (used.includes('left') ? 'right' : 'left') : (t.clientX < innerWidth / 2 ? 'left' : 'right');
+      if (used.includes(side)) continue;
       const el = this.sticks[side];
       el.style.display = 'block';
       el.style.left = t.clientX + 'px';
