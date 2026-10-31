@@ -2,6 +2,7 @@
 
 > **03:45 第 35 轮：** 用户要 Codex 从灰盒一口气做到美术，并说"场景不要有边界"。AI 把场景改成无限地图：每幕一块 40×40 米、四方连续的地块（30000 面、3 MB 以内，每块 6 个障碍物），网页版铺满四周。改了 [docs/Unity场景和提示词.md](docs/Unity场景和提示词.md)（第〇节规矩、"补充 2"给已开着的会话、第四节四幕地块）和 [docs/场景规格.md](docs/场景规格.md) 开头。代价：概念图四周的墙、阳台、房子、钟楼没了。写 game.js 时：地面和地块按玩家位置循环铺 3×3，怪在屏幕外一圈刷出，第四幕石台单独放在原点。
 > **03:35 第 34 轮：** Codex 交出了第一幕的灰盒，用户以为不对。AI 解释这是提示词里的第 1 步，给了一段让 Codex 继续做美术的话。仍在等用户回"写"。
+> **10:55 第 38 轮（续）：** 用户给了 Tripo CLI 的文档链接和一串以 tcli_ 开头的字符，说是 API key，让 AI 配置 Tripo、绑骨、做人物动作。那串是 client_id 不是密钥（接口要 tsk_ 开头），登录失败。AI 改用浏览器授权（`tripo login --region ov` 给出网址和一次性验证码，用户点授权后密钥直接传给 CLI），等用户授权。Tripo CLI 的用法见第九节。
 > **10:45 第 38 轮：** 用户试玩后说"感觉还可以"，问题：①手机上不是全屏（截图是微信内置浏览器，两边黑边）；②角色没有动作、像贴图；③场景美术差了点，要照一条抖音视频（https://v.douyin.com/z-IH3U9f_a8 ，视频编号 7694649010870652187）里那个游戏的画风和制作流程改：GPT 重新出图、three.js 做场景、Tripo 给人物做走路等动作（用户稍后给 Tripo API key）；④开始画面好好做。AI 已修①（铺满窗口、避开刘海、应用内提示换浏览器、manifest 全屏）。抖音视频下载不了（要登录），已请用户用 tmpfiles 传或发截图。**等：视频、Tripo key。** 计划见第七节开头。
 > **08:05 第 37 轮：** 用户醒了，问 AI 做了什么。AI 汇报四幕已上线，请他用 iPhone 从头玩一遍、报帧数和难度（等回复）。顺手按 iPhone 横屏尺寸（844×390）走了一遍界面：右上角暂停和声音键压到了倒计时，已往下挪。
 > **05:00 第 36 轮（续）：四幕都能玩了，已上线。** 舞会 → 阳台（三头犬）→ 决斗（茂丘西奥倒下、提伯尔特 Boss、号角怪）→ 墓室（守住朱丽叶 45 秒，两种结局），加暂停和声音键、自动降画质。Codex 已在 `unity` 分支推了第一幕的灰盒（还是带墙的旧布局，03:40 之后改地块的话用户已发给它）。用户 06:30 醒来后：请他用 iPhone 从头玩一遍、报帧数和难度。详见第四节开头。
@@ -189,6 +190,7 @@
 - Blender：`bash /projects/sandbox/3d-/tools/blender/setup.sh`（装到 `/projects/sandbox/.tools`），之后用 `/projects/sandbox/.tools/blender-py 脚本.py` 运行脚本。3d- 仓库的 `tools/blender/trial/process_model.py` 是以前整理模型（缩放、落地、减面、导出）的示例，可以参考。
 - 两份 HANDOFF 冲突时，以这一份（nai 仓库）为准；3d- 那份只是比赛前的背景。
 - 看视频：ffmpeg 可以用 `pip install --target <目录> imageio-ffmpeg` 拿到。
+- **Tripo CLI（10-31 10:55 装好）：** 在仓库外的 `/projects/sandbox/.tools/tripo`（`npm install tripo-cli`，版本 0.8.1）。每次先 `export TRIPO_HOME=/projects/sandbox/.tools/tripo/home TRIPO_ANALYTICS_ENABLED=0 TRIPO_NO_UPDATE_CHECK=1`，再用 `/projects/sandbox/.tools/tripo/node_modules/.bin/tripo`。登录后密钥存在 `TRIPO_HOME` 里，新 AI 拿不到，要请用户重新授权（`tripo login --region ov`，把网址和验证码给用户）。登录程序要用 `setsid nohup ... & disown` 放到后台，不然命令一结束就被沙盒关掉。常用：`tripo doctor`、`tripo balance`、`tripo anim check 文件.glb`、`tripo anim rig 文件或任务 --rig-type biped`、`tripo anim retarget 绑骨任务 --animation preset:idle preset:walk preset:run --animate-in-place`（每次最多 5 个，按动作计费）；花钱的命令先加 `--dry-run` 看估价。
 
 ## 十、Git 规则
 - 开发在 `dev` 分支，`main` 只有建仓库时的第一个提交，最后再合并。GitHub Pages 从 `dev` 发布。
