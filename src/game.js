@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031d';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031d';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031d';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031d';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031d';
+import { Input } from './input.js?v=20261031e';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031e';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031e';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031e';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031e';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -83,7 +83,7 @@ function ballroomFloor() {
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
       const v = rnd() * 10 - 5;
-      g.fillStyle = `rgb(${50 + v | 0},${36 + v * 0.8 | 0},${48 + v | 0})`;
+      g.fillStyle = `rgb(${82 + v | 0},${60 + v * 0.8 | 0},${76 + v | 0})`;   // 10-31 调亮（原来 50,36,48 在手机上像黑屏）
       g.fillRect(x * cell, y * cell, cell, cell);
     }
     // 大理石纹：画在 3×3 的位置上，保证接缝处也连得上
@@ -201,13 +201,16 @@ const floors = { 1: ballroomFloor() };
 const FLOOR_FN = { 2: gardenFloor, 3: piazzaFloor, 4: tombFloor, 5: islandFloor };
 const floorTex = floors[1]; floorTex.repeat.set(3, 3);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 3, TILE * 3), new THREE.MeshLambertMaterial({ map: floorTex }));
-floor.rotation.x = -Math.PI / 2; scene.add(floor);
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 // ---------- 地块里的障碍物（第一幕，坐标见 docs/Unity场景和提示词.md「补充 2」） ----------
 const ACT1_OBS = [
   { kind: 'table', x: -11, z: -11, r: 1.3 }, { kind: 'table', x: 11, z: 11, r: 1.3 },
   { kind: 'harp', x: 11, z: -11, r: 1.0 }, { kind: 'harp', x: -11, z: 11, r: 1.0 },
   { kind: 'candle', x: -15, z: 0, r: 0.6 }, { kind: 'candle', x: 15, z: 0, r: 0.6 },
+  // 10-31 用户说第一幕"立体度差"：加一圈高大的大理石柱子（有金环），配上影子
+  { kind: 'bcolumn', x: 0, z: -15, r: 0.75 }, { kind: 'bcolumn', x: 0, z: 15, r: 0.75 },
+  { kind: 'bcolumn', x: -16, z: -16, r: 0.75 }, { kind: 'bcolumn', x: 16, z: 16, r: 0.75 }, { kind: 'bcolumn', x: 16, z: -16, r: 0.75 }, { kind: 'bcolumn', x: -16, z: 16, r: 0.75 },
 ];
 const ACT2_OBS = [
   { kind: 'fountain', x: -11, z: -11, r: 2.0 }, { kind: 'statue', x: 11, z: -11, r: 1.0 }, { kind: 'hedge', x: 11, z: 11, r: 2.0 },
@@ -354,6 +357,15 @@ function buildTile(act) {
       put('canvas', new THREE.CylinderGeometry(0.75, 0.75, 2.6, 10, 1, true, 0, Math.PI), x, 1.15, z, 0, 0, Math.PI / 2, 1);
       put('wood', new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4), x + 1.2, 1.9, z);
       put('blueBanner', new THREE.PlaneGeometry(0.7, 0.45), x + 1.55, 2.45, z);
+    } else if (o.kind === 'bcolumn') {
+      put('stone', new THREE.BoxGeometry(1.5, 0.5, 1.5), x, 0.25, z);
+      put('gold', new THREE.TorusGeometry(0.56, 0.06, 6, 16), x, 0.62, z, Math.PI / 2);
+      put('stone', new THREE.CylinderGeometry(0.42, 0.5, 2.0, 16), x, 1.5, z);   // 别太高：镜头从上往下看，太高的柱子会挡住人
+      put('gold', new THREE.TorusGeometry(0.46, 0.06, 6, 16), x, 2.5, z, Math.PI / 2);
+      put('gold', new THREE.CylinderGeometry(0.5, 0.42, 0.3, 16), x, 2.65, z);
+      for (let k = 0; k < 3; k++) { put('wax', new THREE.CylinderGeometry(0.05, 0.05, 0.22, 6), x + (k - 1) * 0.28, 2.92, z); flame(x + (k - 1) * 0.28, 3.1, z); }
+      put('redBanner', new THREE.PlaneGeometry(0.6, 1.2), x, 1.6, z + 0.5);
+      pool(x, z, 2.6);
     } else if (o.kind === 'column') {
       put('stone', new THREE.BoxGeometry(1.4, 0.4, 1.4), x, 0.2, z);
       put('marble', new THREE.CylinderGeometry(0.42, 0.48, 1.6, 12), x, 1.2, z);
@@ -403,6 +415,7 @@ function buildTile(act) {
   for (const [k, list] of Object.entries(parts)) if (list.length) {
     const m = new THREE.Mesh(mergeGeometries(list), MAT[k]);
     if (k === 'pool') m.renderOrder = -1;
+    m.castShadow = !/pool|glow|flame|coolPool/i.test(k);   // 月光的影子（每一幕都有，手机卡了会自动关）
     g.add(m);
   }
   return g;
@@ -453,10 +466,10 @@ function setAct(n) {
   }
   // 第二部的海岛：不用无限地块，是一座有海岸的岛（src/island.js）。第一次进这一幕时才搭
   const isl = n === 5;
-  if (isl && !isle) { isle = makeIsland(islandKit || {}); scene.add(isle.group); }
+  if (isl && (!isle || (isle.partial && islandKit))) { if (isle) scene.remove(isle.group); isle = makeIsland(islandKit || {}); isle.partial = !islandKit; scene.add(isle.group); }
   if (isle) isle.group.visible = isl;
   floor.visible = !isl;
-  moon.castShadow = isl && !noShadow; heroLight.visible = !isl; heroGlow.visible = !isl;
+  moon.castShadow = !noShadow; heroLight.visible = !isl; heroGlow.visible = !isl;
   shadowMesh.material.opacity = isl ? 0.45 : 1;
   curObs = OBS[n];
   const L = LOOKS[n];
@@ -721,7 +734,7 @@ let hero = null, juliet = null, tybalt = null, mercutio = null, caliban = null;
 // ---------- 数据 ----------
 const E = { n: 0, type: new Uint8Array(MAX_E), x: new Float32Array(MAX_E), z: new Float32Array(MAX_E), hp: new Float32Array(MAX_E),
   flash: new Float32Array(MAX_E), phase: new Float32Array(MAX_E), speed: new Float32Array(MAX_E), id: new Int32Array(MAX_E),
-  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E) };
+  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E), wind: new Float32Array(MAX_E) };
 // 怪射来的酸音（号角怪）
 const MAX_EB = 240;
 const EB = { n: 0, x: new Float32Array(MAX_EB), z: new Float32Array(MAX_EB), dx: new Float32Array(MAX_EB), dz: new Float32Array(MAX_EB), life: new Float32Array(MAX_EB) };
@@ -737,7 +750,7 @@ let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act 
 let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
 const maxHp = () => 100 + stats.maxHpBonus;
-const xpNeed = (L) => (L === 1 ? 2 : Math.round(3 * Math.pow(L, 1.35)));   // 第一次升级来得快（约第 7 秒）
+const xpNeed = (L) => (L === 1 ? 3 : Math.round(4 * Math.pow(L, 1.45)));   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
 const input = new Input();
 
 function resetRun() {
@@ -760,7 +773,7 @@ function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   const ca = Math.cos(a), p = { x: cx + Math.sin(a) * d * wide, z: cz + ca * d * (ca < 0 ? 1.1 : 0.75) };   // 生成在屏幕外
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
-  E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
+  E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.wind[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
   E.hp[i] = t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0);
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
 }
@@ -795,7 +808,7 @@ function director2(dt) {
     for (let k = 0; k < 8 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
   }
   if (!dogSpawned && actTime >= DOG_AT) {
-    dogSpawned = true; bossChargeCd = 4;
+    dogSpawned = true; sfxBoss(); bossChargeCd = 4;
     spawnEnemy(T.cerberus, Math.PI, 15);
     bark(BOSS_LINES.dogIn.who, BOSS_LINES.dogIn.text);
   }
@@ -824,7 +837,7 @@ function director3(dt) {
     setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.mercutioFall2.who, BOSS_LINES.mercutioFall2.text); }, 2600);
   }
   if (!dogSpawned && actTime >= bossAt) {
-    dogSpawned = true; bossChargeCd = 3; tybaltHalfSaid = false;
+    dogSpawned = true; sfxBoss(); bossChargeCd = 3; tybaltHalfSaid = false;
     spawnEnemy(T.tybalt, Math.PI, 14);
     bark(BOSS_LINES.tybaltIn.who, BOSS_LINES.tybaltIn.text);
     setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.tybaltIn2.who, BOSS_LINES.tybaltIn2.text); }, 2400);
@@ -842,7 +855,7 @@ function director5(dt) {
     for (let k = 0; k < 7 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
   }
   if (!dogSpawned && actTime >= Math.min(22, ACT_LEN * 0.5)) {
-    dogSpawned = true; bossChargeCd = 3; tybaltHalfSaid = false;
+    dogSpawned = true; sfxBoss(); bossChargeCd = 3; tybaltHalfSaid = false;
     spawnEnemy(T.caliban, Math.PI, 14);
     bark(TP_BOSS.in.who, TP_BOSS.in.text);
     setTimeout(() => { if (act === 5 && phase === 'fight') bark(TP_BOSS.in2.who, TP_BOSS.in2.text); }, 2400);
@@ -868,7 +881,8 @@ function killEnemy(i) {
     ring(E.x[i], E.z[i], 6, 0.8);
   } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
-  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk]) a[i] = a[j];
+  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind]) a[i] = a[j];
+  sfxPop(t.boss);
   kills++;
 }
 function removeBullet(i) {
@@ -880,6 +894,7 @@ function hurtEnemy(i, dmg, kx = 0, kz = 0) {
   if (TYPES[E.type[i]].boss) { kx *= 0.08; kz *= 0.08; }   // 三头犬推不太动
   if (kx || kz) { E.x[i] += kx; E.z[i] += kz; }
   if (E.hp[i] <= 0) { killEnemy(i); return true; }
+  sfxHit();
   return false;
 }
 
@@ -929,7 +944,7 @@ function mouseAim() {
 // ---------- 声音：每发一个音符弹一声，连起来是一段旋律 ----------
 let actx = null;
 const MELODY = [0, 4, 7, 9, 7, 4, 2, 4, 0, 4, 7, 12, 9, 7, 4, 2];
-function initAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch { actx = null; } }
+function initAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); bgmStart(); } catch { actx = null; } }
 let muted = false;
 function pluck(semi, vol = 0.05, dur = 0.35, type = 'triangle') {
   if (!actx || muted) return;
@@ -938,15 +953,74 @@ function pluck(semi, vol = 0.05, dur = 0.35, type = 'triangle') {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
   o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
 }
+// ---------- 音效和背景音乐：全用 Web Audio 现场合成，不用下载文件（10-31 用户说"没有音效"） ----------
+let noiseBuf = null;
+function noise() {
+  if (!noiseBuf) { const n = actx.sampleRate * 0.5 | 0; noiseBuf = actx.createBuffer(1, n, actx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
+  return noiseBuf;
+}
+const lastSfx = {};
+const gate = (k, ms) => { const t = performance.now(); if (t - (lastSfx[k] || 0) < ms) return false; lastSfx[k] = t; return true; };   // 同一种声音别叠太密
+function tone(freq, { t0 = 0, dur = 0.2, vol = 0.05, type = 'sine', to = 0, attack = 0.005 } = {}) {
+  if (!actx || muted) return;
+  const t = actx.currentTime + t0, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function burst({ t0 = 0, dur = 0.12, vol = 0.05, freq = 1200, q = 1, type = 'bandpass' } = {}) {
+  if (!actx || muted) return;
+  const t = actx.currentTime + t0, s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+  s.buffer = noise(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(actx.destination); s.start(t); s.stop(t + dur + 0.02);
+}
+const G4 = 392, nt = (n) => G4 * Math.pow(2, n / 12);
+function sfxPop(boss) {   // 怪被打动：一声往上滑的"啵"
+  if (boss) { [0, 4, 7, 12, 16, 19].forEach((n, k) => tone(nt(n), { t0: k * 0.07, dur: 0.6, vol: 0.06, type: 'triangle' })); burst({ dur: 0.5, vol: 0.05, freq: 5000, type: 'highpass' }); return; }
+  if (!gate('pop', 45)) return;
+  tone(520 + Math.random() * 160, { dur: 0.13, vol: 0.045, to: 1250 }); burst({ dur: 0.05, vol: 0.02, freq: 3200, q: 2 });
+}
+let pickN = 0, pickT = 0;
+function sfxPick() {   // 捡萤火：叮，连着捡音越来越高
+  const t = performance.now(); pickN = t - pickT < 700 ? Math.min(pickN + 1, 14) : 0; pickT = t;
+  if (!gate('pick', 35)) return;
+  tone(nt(12 + [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33][pickN]), { dur: 0.16, vol: 0.035, type: 'triangle' });
+}
+function sfxHurt() { if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
+function sfxHit() { if (gate('hit', 60)) burst({ dur: 0.045, vol: 0.018, freq: 2400, q: 3 }); }
+function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { t0: k * 0.055, dur: 0.45, vol: 0.05, type: 'triangle' })); burst({ t0: 0.3, dur: 0.6, vol: 0.03, freq: 7000, type: 'highpass' }); }
+function sfxClick() { if (gate('click', 60)) tone(1250, { dur: 0.05, vol: 0.03, type: 'triangle' }); }
+function sfxBoss() { tone(98, { dur: 1.4, vol: 0.07, type: 'sawtooth', to: 82 }); tone(146.8, { dur: 1.4, vol: 0.04, type: 'sawtooth', to: 123 }); burst({ dur: 0.9, vol: 0.06, freq: 260, type: 'lowpass' }); }
+function sfxAct() { [[0, 4, 7], [5, 9, 12], [7, 11, 14], [12, 16, 19]].forEach((ch, k) => ch.forEach((n) => tone(nt(n), { t0: k * 0.16, dur: k === 3 ? 0.9 : 0.25, vol: 0.035, type: 'triangle' }))); }
+// 背景音乐：G 大调 I–vi–IV–V（墓室那一幕换成小调的顺序），垫底的和弦 + 低音 + 分解和弦，打起来加一点镲。92 拍每分钟
+const PROG = { day: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], night: [[-3, 0, 4], [-7, -3, 0], [0, 4, 7], [-5, -1, 2]] };
+const BGM = { next: 0, step: 0, timer: 0 };
+function bgmStart() { if (!actx || BGM.timer) return; BGM.next = actx.currentTime + 0.1; BGM.timer = setInterval(bgmTick, 120); }
+function bgmTick() {
+  if (!actx) return;
+  if (muted || document.hidden || actx.state !== 'running') { BGM.next = actx.currentTime + 0.1; return; }
+  const spb = 60 / 92 / 2;
+  while (BGM.next < actx.currentTime + 0.3) {
+    const st = BGM.step++, bar = Math.floor(st / 8) % 4, beat = st % 8, ch = (act === 4 ? PROG.night : PROG.day)[bar], t0 = Math.max(0, BGM.next - actx.currentTime);
+    const fight = phase === 'fight' || phase === 'levelup', base = 196;
+    if (beat === 0) for (const n of ch) tone(base * Math.pow(2, n / 12), { t0, dur: spb * 8, vol: 0.014, attack: 0.4 });
+    if (beat === 0 || beat === 4 || (fight && beat === 6)) tone(base / 2 * Math.pow(2, ch[0] / 12), { t0, dur: spb * 2.5, vol: 0.055, type: 'triangle' });
+    tone(base * 2 * Math.pow(2, ch[[0, 1, 2, 1, 0, 1, 2, 1][beat]] / 12), { t0, dur: spb * 1.4, vol: fight ? 0.017 : 0.011, type: 'triangle' });
+    if (fight && (beat === 2 || beat === 6)) burst({ t0, dur: 0.05, vol: 0.014, freq: 7000, q: 0.7, type: 'highpass' });
+    if (fight && (beat === 0 || beat === 4)) tone(120, { t0, dur: 0.12, vol: 0.05, to: 50 });
+    BGM.next += spb;
+  }
+}
 
 // ---------- 界面 ----------
 const ui = document.createElement('div'); ui.id = 'ui'; stage.appendChild(ui);
 ui.innerHTML = `
 <div id="vignette"></div>
 <div id="bars" class="hide"><div class="hpbar"><i></i></div><div class="xpbar"><i></i></div><span class="lv">1 级</span></div>
-<div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span></span></div>
+<div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span class="goal"></span><span class="tm"></span></div>
 <div id="boss" class="hide"><b>看门的三头犬</b><div class="bossbar"><i></i></div></div>
-<div id="acttitle" class="hide"><b></b></div>
+<div id="acttitle" class="hide"><b></b><small></small></div>
 <div id="calm" class="hide"><b>朱丽叶的安稳</b><div class="bossbar"><i></i></div></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
 <div id="dlg" class="hide" data-ui><div class="cg hide"><img alt=""></div><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
@@ -978,6 +1052,7 @@ ui.innerHTML = `
 <div id="pause" class="hide" data-ui><h2>暂停</h2><button class="b-resume">继续</button><button class="b-restart">从头开始</button></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
 const $ = (s) => ui.querySelector(s);
+ui.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button')) sfxClick(); }, true);   // 点按钮的轻响
 const show = (el, on = true) => el.classList.toggle('hide', !on);
 // 游戏自己的封面出来了，去掉网页一打开就显示的那张（index.html 里的 #boot），等封面图下好再去，免得中间闪一下黑
 { const b = document.getElementById('boot'), im = ui.querySelector('#cover .c1'); const off = () => b && b.remove(); if (im.complete) off(); else { im.onload = im.onerror = off; setTimeout(off, 12000); } }
@@ -1062,7 +1137,10 @@ async function playScene(lines) {
 }
 
 // 三选一：升级时，或者幕间"对话里选回答"
+// 卡片出来后 0.6 秒内点不了（10-31 用户说"一不小心连升两级"：连着两次升级时，第二组卡片刚出来就被手指点上了）
+let cardLock = 0;
 function chooseCards(title, isChoice) {
+  cardLock = Date.now() + (AUTO ? 0 : 650);
   return new Promise((resolve) => {
     const cards = drawCards(levels, level), el = $('#cards'), row = el.querySelector('.row');
     if (!cards.length) { resolve(); return; }
@@ -1075,7 +1153,7 @@ function chooseCards(title, isChoice) {
       b.innerHTML = isChoice
         ? `<q>${LOVE[k.id]}</q><b>${k.name}</b><small>${k.desc[lv]}</small>`
         : `<b>${k.name}</b><em>${lv ? `${lv} 级 → ${lv + 1} 级` : '新技能'}</em><small>${k.desc[lv]}</small><q>${LOVE[k.id]}</q>`;
-      b.onclick = () => { show(el, false); takeSkill(k.id); if (isChoice) recordChoice(title, LOVE[k.id], k.name); resolve(k.id); };
+      b.onclick = () => { if (Date.now() < cardLock) return; cardLock = Date.now() + 1e9; show(el, false); takeSkill(k.id); if (isChoice) recordChoice(title, LOVE[k.id], k.name); resolve(k.id); };
       row.appendChild(b);
       if (AUTO && idx === 0) setTimeout(() => b.click(), 60);
     });
@@ -1113,11 +1191,11 @@ function paintingCard(act, opts) {
 // ---------- 流程 ----------
 let lineIdx = 0, saidLow = false, firstLevelSaid = false, saidCalmHalf = false, saidCalmLow = false;
 const ACTS = {
-  1: { name: '第一幕 · 舞会', lines: ACT1_LINES },
-  2: { name: '第二幕 · 阳台', lines: ACT2_LINES },
-  3: { name: '第三幕 · 决斗', lines: ACT3_LINES },
-  4: { name: '第四幕 · 墓室', lines: ACT4_LINES },
-  5: { name: '第二部 · 漂岛', lines: TP_LINES },
+  1: { name: '第一幕 · 舞会', lines: ACT1_LINES, goal: '打动闹事的客人，撑到舞会散场' },
+  2: { name: '第二幕 · 阳台', lines: ACT2_LINES, goal: '守在阳台下，打动冲来的三头犬' },
+  3: { name: '第三幕 · 决斗', lines: ACT3_LINES, goal: '用歌声打动提伯尔特，别让决斗见血' },
+  4: { name: '第四幕 · 墓室', lines: ACT4_LINES, goal: '守住沉睡的朱丽叶，别让亡魂靠近石台' },
+  5: { name: '第二部 · 漂岛', lines: TP_LINES, goal: '打动海里爬上来的怪，再打动卡利班' },
 };
 const storyOf = (n) => (n <= 4 ? 'rj' : 'tp');
 const ACT_NO = ['', '第一', '第二', '第三', '第四'];
@@ -1128,6 +1206,7 @@ async function startStory(story, from, again) {
   phase = 'story';
   if (!again) { save.plays++; persist(); }
   if (story === 'tp') {
+    if (islandKit) { setAct(5); player.x = ISLE_START.x; player.z = ISLE_START.z; }   // 剧情背后就是海岛（原来是第一幕的舞厅）
     if (!again) await playScene(SCENES.tpIntro);
     await waitRest(); beginAct(5); return;
   }
@@ -1135,7 +1214,7 @@ async function startStory(story, from, again) {
     const snap = save.rj.snaps[from];
     if (snap) { const d = structuredClone(snap); stats = { ...baseStats(), ...d.stats }; levels = d.levels; level = d.level; xp = d.xp; }
     else giveBuild(from);
-    player.hp = maxHp();
+    player.hp = maxHp(); setAct(from);   // 剧情背后是这一幕的场景
     if (!again && SCENES[`act${from - 1}To${from}`]) await playScene(SCENES[`act${from - 1}To${from}`]);   // 先放这一幕前面的剧情，好知道故事走到哪了
     await waitRest(); beginAct(from); return;
   }
@@ -1165,15 +1244,17 @@ function beginAct(n, retry) {
   dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
   if (juliet) { juliet.visible = false; layJuliet(false); }
   if (tybalt) tybalt.visible = false;
-  if (mercutio) { mercutio.visible = n === 3; mercutio.position.set(-1.6, 0, 1.2); mercutio.userData.inner.rotation.set(0, 0, 0); }
+  if (mercutio) { mercutio.visible = n === 1 || n === 3; mercutio.position.set(-1.6, 0, 1.2); mercutio.userData.inner.rotation.set(0, 0, 0); }   // 茂丘西奥第一幕也跟着罗密欧去舞会
   if (n === 4) { player.z = 3.2; if (juliet) { juliet.visible = true; layJuliet(true); } }
   if (n === 5) { player.x = ISLE_START.x; player.z = ISLE_START.z; }
   setAct(n);
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
   show($('#bars')); show($('#actinfo')); show($('#tools'));
-  const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
-  setTimeout(() => show(at, false), 2600);
+  $('#actinfo .goal').textContent = ACTS[n].goal;
+  const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; at.querySelector('small').textContent = ACTS[n].goal; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
+  setTimeout(() => show(at, false), 3400);
+  sfxAct();
   phase = 'fight';
 }
 // 幕结束时还没飞到的萤火，经验直接算给罗密欧
@@ -1278,14 +1359,14 @@ function step(dt) {
   const fighting = phase === 'fight';
 
   // 主角移动
-  const mv = input.getMove();
+  const mv = input.getMove(), mag = Math.hypot(mv.x, mv.y), mvOn = mag > 0.2;   // 摇杆推得很轻时不动（原来会"站着不动却在挪"）
   const canMove = fighting || phase === 'title';
-  if (canMove && phase !== 'title') {
+  if (canMove && phase !== 'title' && mvOn) {
     const sp = 6.4 * stats.speedMul;
     player.x += mv.x * sp * dt; player.z += mv.y * sp * dt;
     pushOut(player, player.r);
   }
-  player.moving = canMove && phase !== 'title' ? Math.hypot(mv.x, mv.y) : 0;
+  player.moving = canMove && phase !== 'title' && mvOn ? mag : 0;
   if (player.moving > 0.1) { player.mvx = mv.x; player.mvz = mv.y; }
   updateTiles(player.x, player.z);
 
@@ -1346,23 +1427,30 @@ function step(dt) {
       if (d < 7) sp = -sp * 0.6; else if (d < 9) sp = 0;
       if (fighting && d < 13 && E.atk[i] <= 0 && EB.n < MAX_EB) {
         E.atk[i] = 2.4 + Math.random() * 1.2;
-        const k = EB.n++; EB.x[k] = E.x[i]; EB.z[k] = E.z[i]; EB.dx[k] = dx / d * 7; EB.dz[k] = dz / d * 7; EB.life[k] = 2.4;
+        const k = EB.n++; EB.x[k] = E.x[i]; EB.z[k] = E.z[i]; EB.dx[k] = dx / d * 5; EB.dz[k] = dz / d * 5; EB.life[k] = 3.2;   // 慢一点，看得见、躲得开
       }
     }
+    // 10-31 用户说小怪"自动攻击、必中、躲不掉"：改成先蓄力（变红、停下、鼓起来）再扑，蓄力时走开就打不中
+    if (E.wind[i] > 0) {
+      E.wind[i] -= dt; sp = 0;
+      if (E.wind[i] <= 0) {
+        E.atk[i] = t.boss ? 1.1 : 1.3;
+        if (fighting && d < touch + (t.boss ? 0.9 : 0.5) && player.hurtCd <= 0 && !GOD) {
+          player.hp -= t.dmg * early; player.hurtCd = 0.45; sfxHurt();
+          if (player.hp <= 0) { player.hp = 0; die(); return; }
+        }
+      }
+    } else if (fighting && !t.ranged && d < touch + (t.boss ? 0.6 : 0.3) && E.atk[i] <= 0) E.wind[i] = t.boss ? 0.7 : t.key === 'birdhead' ? 0.45 : 0.6;
     const st = sp >= 0 ? Math.min(sp * dt, Math.max(0, d - touch)) : sp * dt;
     E.x[i] += dx / d * st; E.z[i] += dz / d * st;
     if (Math.abs(dx) > 0.2) E.face[i] = dx > 0 ? 1 : -1;
-    if (fighting && d < touch + 0.12 && player.hurtCd <= 0 && !GOD) {
-      player.hp -= t.dmg * early; player.hurtCd = 0.45;
-      if (player.hp <= 0) { player.hp = 0; die(); return; }
-    }
   }
   if (player.hurtCd > 0) player.hurtCd -= dt;
   for (let k = EB.n - 1; k >= 0; k--) {
     EB.x[k] += EB.dx[k] * dt; EB.z[k] += EB.dz[k] * dt; EB.life[k] -= dt;
     const hx = EB.x[k] - player.x, hz = EB.z[k] - player.z;
     const hitP = fighting && hx * hx + hz * hz < 0.55 * 0.55;
-    if (hitP && player.hurtCd <= 0 && !GOD) { player.hp -= 7; player.hurtCd = 0.45; if (player.hp <= 0) { player.hp = 0; die(); return; } }
+    if (hitP && player.hurtCd <= 0 && !GOD) { player.hp -= 7; player.hurtCd = 0.45; sfxHurt(); if (player.hp <= 0) { player.hp = 0; die(); return; } }
     if (hitP || EB.life[k] <= 0) { EB.n--; for (const a of [EB.x, EB.z, EB.dx, EB.dz, EB.life]) a[k] = a[EB.n]; }
   }
   buildGrid();
@@ -1457,7 +1545,7 @@ function step(dt) {
   let crowd = 0;
   forNear(player.x, player.z, 4, (j) => { const dx = E.x[j] - player.x, dz = E.z[j] - player.z; if (dx * dx + dz * dz < 16) crowd++; });
   const boost = player.hp < maxHp() * 0.35 || crowd >= 25 ? 2 : 1;   // 绝境加速
-  stepOrbs(dt, 7, boost);   // 萤火 7 米内就会飞向罗密欧
+  stepOrbs(dt, 1.7, boost);   // 10-31 用户要"掉在怪倒下的地方，走过去捡"：萤火留在原地，走到 1.7 米内才飞过来（"轻快"技能捡得远一点）
   stepFx(dt);
   if (pendingLevels > 0 && phase === 'fight') openLevelUp();
 }
@@ -1483,9 +1571,9 @@ function stepOrbs(dt, magnet, boost) {
   for (let i = O.n - 1; i >= 0; i--) {
     O.t[i] += dt;
     const dx = player.x - O.x[i], dz = player.z - O.z[i], d = Math.hypot(dx, dz);
-    const pull = phase === 'actEnd' ? 99 : magnet * (1 + Math.min(1, (levels.stride || 0) * 0.15));
+    const pull = phase === 'actEnd' ? 99 : magnet * (1 + (levels.stride || 0) * 0.4);
     if (d < 0.6) {
-      xp += O.v[i] * boost; O.n--;
+      xp += O.v[i] * boost; O.n--; sfxPick();
       for (const a of [O.x, O.z, O.v, O.t]) a[i] = a[O.n];
       while (xp >= xpNeed(level)) { xp -= xpNeed(level); level++; pendingLevels++; }
     } else if (d < pull) { const s = (phase === 'actEnd' ? 18 : 6 + 9 * (1 - d / pull)) * dt; O.x[i] += dx / d * s; O.z[i] += dz / d * s; }
@@ -1504,7 +1592,7 @@ function stepFx(dt) {
 async function openLevelUp() {
   phase = 'levelup';
   slowmo = 0.35;
-  pluck(7, 0.06, 0.5, 'sine'); pluck(12, 0.05, 0.6, 'sine');
+  sfxLevel();
   await sleep(AUTO ? 10 : 380);
   slowmo = 0;
   if (!firstLevelSaid) { firstLevelSaid = true; bark(EVENT_LINES.firstLevel.who, EVENT_LINES.firstLevel.text); }
@@ -1513,7 +1601,8 @@ async function openLevelUp() {
     pendingLevels--;
     await chooseCards(`升到 ${level - pendingLevels} 级！选一首新歌`, false);
     shockwave(5.5, 3);
-    if (hero) { playAnim(hero, 'jump', { once: true, fade: 0.1, speed: 1.3 }); hero.userData.jumpT = 1.6; }
+    if (hero) { playAnim(hero, 'jump', { once: true, fade: 0.1, speed: 1.3 }); hero.userData.jumpT = 0.8; }
+    if (pendingLevels > 0) await sleep(AUTO ? 10 : 350);
   }
   if (phase === 'levelup') phase = 'fight';
 }
@@ -1539,9 +1628,9 @@ function draw(dt) {
       if (bm) {   // Boss 的 3D 模型：冲刺时跑，平时走，贴近罗密欧时挥剑（没有这个动作就走）
         bm.visible = true; bm.position.set(E.x[i], 0, E.z[i]);
         bm.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]) + (bm.userData.yaw || 0);
-        const near = Math.hypot(player.x - E.x[i], player.z - E.z[i]) < 2.6;
+        const near = E.wind[i] > 0 || Math.hypot(player.x - E.x[i], player.z - E.z[i]) < 1.6;
         playAnim(bm, near && bm.userData.actions?.slash ? 'slash' : bossCharge > 0 && bm.userData.actions?.run ? 'run' : 'walk', { speed: near ? 1.6 : 1 });
-        bm.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : 1);
+        bm.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : E.wind[i] > 0 ? 1.08 : 1);
         if (!bm.userData.actions) bm.userData.inner.position.y = Math.abs(Math.sin(time * 6)) * 0.15;
       }
       writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
@@ -1555,16 +1644,17 @@ function draw(dt) {
       const dx = (t.ghost && act === 4 ? -E.x[i] : player.x - E.x[i]), dz = (t.ghost && act === 4 ? -E.z[i] : player.z - E.z[i]);
       const yaw = Math.atan2(dx, dz);
       const bob = mf.n === 1 ? (t.ghost ? 0.25 + Math.sin(time * 3 + E.phase[i]) * 0.15 : Math.abs(Math.sin(time * 9 + E.phase[i])) * 0.15) : 0;
-      writeMatrixY(fm.instanceMatrix.array, k2, E.x[i], bob, E.z[i], 1, yaw + (mf.n === 1 && !t.ghost ? Math.sin(time * 9 + E.phase[i]) * 0.12 : 0));
-      const fl = E.flash[i] > 0 ? 2.4 : 1, col = fm.instanceColor.array; col[k2 * 3] = fl; col[k2 * 3 + 1] = fl; col[k2 * 3 + 2] = fl;
+      writeMatrixY(fm.instanceMatrix.array, k2, E.x[i], bob, E.z[i], E.wind[i] > 0 ? 1.12 : 1, yaw + (mf.n === 1 && !t.ghost ? Math.sin(time * 9 + E.phase[i]) * 0.12 : 0));
+      const fl = E.flash[i] > 0 ? 2.4 : 1, w = E.wind[i] > 0 ? 0.5 + 0.5 * Math.sin(time * 40) : 0, col = fm.instanceColor.array;
+      col[k2 * 3] = fl + w * 1.6; col[k2 * 3 + 1] = fl * (1 - w * 0.6); col[k2 * 3 + 2] = fl * (1 - w * 0.6);   // 蓄力时闪红
       writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
       continue;
     }
     const b = Math.abs(Math.sin(time * (ty === T.birdhead ? 13 : 8) + E.phase[i]));
     const s = t.h, flip = t.flip ? E.face[i] : 1;
     writeMatrix(m.instanceMatrix.array, k, E.x[i], b * 0.12, E.z[i], s * flip * (1 + (1 - b) * 0.06), s * (0.94 + b * 0.08), s * (0.94 + b * 0.08));
-    const f = E.flash[i] > 0 ? 2.6 : 0.92, col = m.instanceColor.array;
-    col[k * 3] = f; col[k * 3 + 1] = f; col[k * 3 + 2] = E.flash[i] > 0 ? 2.6 : 0.98;
+    const f = E.flash[i] > 0 ? 2.6 : 0.92, col = m.instanceColor.array, w = E.wind[i] > 0 ? 1 : 0;
+    col[k * 3] = f + w; col[k * 3 + 1] = f * (1 - w * 0.5); col[k * 3 + 2] = (E.flash[i] > 0 ? 2.6 : 0.98) * (1 - w * 0.5);
     const ss = t.r * 3;
     writeMatrix(sm, i, E.x[i], 0.012, E.z[i], ss, 1, ss * 0.7);
   }
@@ -1602,7 +1692,11 @@ function draw(dt) {
     let dr = want - hero.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
     hero.rotation.y += dr * Math.min(1, dt * 12);
     if (hero.userData.jumpT > 0) hero.userData.jumpT -= dt;
-    else playAnim(hero, mv ? 'run' : 'idle', { speed: mv ? 1.05 : 1 });
+    if (hero.userData.jumpT <= 0 || mv) {   // 跳的时候一动就接着跑（原来跳完会定住，人在挪却不迈腿）
+      hero.userData.jumpT = 0;
+      const fast = player.moving > 0.62, k = stats.speedMul;
+      playAnim(hero, !mv ? 'idle' : fast || !hero.userData.actions.walk ? 'run' : 'walk', { speed: !mv ? 1 : fast ? 0.85 * k + 0.25 * player.moving : (0.9 + player.moving * 0.8) * k });
+    }
     hero.userData.mixer.update(dt);
     hero.visible = !(player.hurtCd > 0.25 && Math.floor(time * 20) % 2);
   }
@@ -1620,11 +1714,11 @@ function draw(dt) {
   }
   heroLight.position.set(player.x, 2.6, player.z + 1.2);
   heroGlow.position.x = player.x; heroGlow.position.z = player.z;
-  if (isle && isle.group.visible) {   // 海岛：太阳和影子的范围跟着主角（往画面上方多照一点），海浪和小船动起来
-    const sun = LOOKS[5].sun, tx = player.x, tz = player.z - 4;
+  {   // 太阳（月亮）和影子的范围跟着主角，往画面上方多照一点
+    const sun = LOOKS[tileAct]?.sun || [-6, 12, -4], tx = player.x, tz = player.z - 4;
     moon.target.position.set(tx, 0, tz); moon.position.set(tx + sun[0] * 2, sun[1] * 2, tz + sun[2] * 2);
-    isle.tick(time);
   }
+  if (isle && isle.group.visible) isle.tick(time);   // 海岛：海浪和小船动起来
 
   // 镜头：打的时候跟着主角；幕结束时拉近；名画定格时拉起
   const want = (phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1) * (act === 5 ? 1.12 : 1);   // 海岛镜头高一点，多看到海
@@ -1641,7 +1735,7 @@ function draw(dt) {
     $('#bars .xpbar i').style.width = (xp / xpNeed(level) * 100) + '%';
     $('#bars .lv').textContent = `${level} 级`;
     const left = Math.max(0, Math.ceil(ACT_LEN - actTime));
-    $('#actinfo span').textContent = act === 4 ? `醒来还有 ${left} 秒` : actTime >= ACT_LEN && !dogDown ? (act === 2 ? '让三头犬睡着' : '打动提伯尔特') : `${left} 秒`;
+    $('#actinfo .tm').textContent = act === 4 ? `醒来还有 ${left} 秒` : actTime >= ACT_LEN && !dogDown ? (act === 2 ? '让三头犬睡着' : act === 5 ? '打动卡利班' : '打动提伯尔特') : `${left} 秒`;
     const bi = dogSpawned && !dogDown ? bossIndex() : -1;
     show($('#boss'), bi >= 0);
     if (bi >= 0) { const bt = TYPES[E.type[bi]]; $('#boss b').textContent = bt.label; $('#boss i').style.width = (E.hp[bi] / (bt.hp + HP_ADD[E.type[bi]] * (act - 1)) * 100) + '%'; }
