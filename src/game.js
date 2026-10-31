@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031h';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031h';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031h';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031h';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031h';
+import { Input } from './input.js?v=20261031i';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031i';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031i';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031i';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031i';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -750,14 +750,16 @@ let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevel
 let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
 let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
-const maxHp = () => 60 + stats.maxHpBonus;   // 10-31 用户说太简单、血多：100 → 60
+const maxHp = () => 60 + stats.maxHpBonus;
+let runRoses = 0;   // 10-31 用户说太简单、血多：100 → 60
 const xpNeed = (L) => (L === 1 ? 4 : Math.round(7 * Math.pow(L, 1.5)));   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
 const input = new Input();
 
 function resetRun() {
   E.n = B.n = O.n = 0;
-  player.x = player.z = 0; player.hp = 60; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
-  stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0; F.n = 0;
+  player.x = player.z = 0; player.hp = 60 + stats.maxHpBonus; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
+  stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0; F.n = 0; runRoses = 0;
+  stats.maxHpBonus += save.perm.hp * 10; stats.dmgMul *= 1 + save.perm.dmg * 0.1;   // 后台买的永久本事
   time = actTime = 0; fireCd = drumCd = slowmo = 0; lineIdx = 0; saidLow = false; firstLevelSaid = false; birdWaves = 0;
   act = 1; snapshot = null;
   if (tybalt) tybalt.visible = false;
@@ -1013,7 +1015,7 @@ function sfxPick() {   // 捡萤火：叮，连着捡音越来越高
   if (!gate('pick', 35)) return;
   tone(nt(12 + [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33][pickN]), { dur: 0.16, vol: 0.035, type: 'triangle' });
 }
-function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); loseFans(3); if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
+function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); loseFans(3); if (Math.random() < 0.5) throwStuff('🍅', 2); if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
 function sfxHit() { if (gate('hit', 60)) burst({ dur: 0.045, vol: 0.018, freq: 2400, q: 3 }); }
 function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { t0: k * 0.055, dur: 0.45, vol: 0.05, type: 'triangle' })); burst({ t0: 0.3, dur: 0.6, vol: 0.03, freq: 7000, type: 'highpass' }); }
 function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq: 900, q: 1.5 }); }
@@ -1059,7 +1061,7 @@ ui.innerHTML = `
   <div class="story" data-s="rj"><img alt="" src="assets/cg/key-rj.jpg"><div class="st"><b>第一部 · 罗密欧与朱丽叶</b><small>选一幕开始</small><div class="acts"></div><div class="sb"></div></div></div>
   <div class="story" data-s="tp"><img alt="" src="assets/cg/key-tp.jpg"><div class="st"><b>第二部 · 暴风雨</b><small>新 · 海上的魔法岛</small><div class="acts"></div><div class="sb"></div></div></div>
  </div>
- <div class="tfoot"><span class="hello"></span><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
+ <div class="tfoot"><span class="hello"></span><button class="b-shop">后台 🌹</button><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
  <p class="go">加载中……</p><p class="ver">${VERSION} 开发中</p><p class="fshint hide"></p></div>
 <div id="cover" data-ui><div class="cbg"><img class="c1" alt="" src="assets/cg/key-rj.jpg"><img class="c2" alt="" src="assets/cg/key-tp.jpg"></div>
  <div class="clogo"><small>一首情歌，改写两个结局</small><h1>莎士比亚的两场戏</h1><p>罗密欧与朱丽叶 · 暴风雨</p></div>
@@ -1075,6 +1077,9 @@ ui.innerHTML = `
  <li>第一部的最后一幕：守住沉睡的朱丽叶，就能<b>改写结局</b>。</li>
  <li>进度存在这台手机里，下次打开能从上次那一幕<b>继续</b>。</li></ul><div class="btns"><button class="b-back">返回</button></div></div></div>
 <div id="viewer" class="hide" data-ui><img alt=""></div>
+<div id="shop" class="hide" data-ui><div class="inner"><h2>后台</h2><p class="have"></p><div class="items"></div><p class="note">每次演出（就算倒下了）观众都会扔玫瑰。莎士比亚把剧本翻回第一天，可你买到的本事会一直留着。</p><div class="btns"><button class="b-back">回到前台</button></div></div></div>
+<div id="poster" class="hide" data-ui><img alt=""><p>长按图片保存，发给朋友看看你的版本</p><div class="btns"><button class="b-back">好</button></div></div>
+<div id="wxguide" class="hide" data-ui><div class="arrow">↗</div><h2>想全屏玩？</h2><p>点右上角 <b>···</b> → 选 <b>在浏览器打开</b><br>在 Safari 里点 <b>分享 → 添加到主屏幕</b>，从桌面图标进就是全屏</p><div class="btns"><button class="b-ok">先在微信里玩</button></div></div>
 <div id="tools" class="hide"><button class="b-pause">暂停</button><button class="b-mute">声音 开</button></div>
 <div id="pause" class="hide" data-ui><h2>暂停</h2><button class="b-resume">继续</button><button class="b-restart">从头开始</button></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
@@ -1270,6 +1275,7 @@ function beginAct(n, retry) {
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.15);   // 每一幕开头只回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
   clearChests(); eliteT = 0; casting = 0; player.conf = 0; shakeIdx = 0; inkT = 0; trailReset();
+  if (!retry) for (let k = F.n; k < save.perm.fans * 2; k++) addFan(k % 2 ? T.drum : T.lute);   // 后台买的：开场就带几个伴舞
   dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
   if (juliet) { juliet.visible = false; layJuliet(false); }
   if (tybalt) tybalt.visible = false;
@@ -1279,7 +1285,7 @@ function beginAct(n, retry) {
   setAct(n);
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
-  show($('#bars')); show($('#actinfo')); show($('#tools'));
+  show($('#bars')); show($('#actinfo')); show($('#tools')); crowd.classList.remove('hide');
   $('#actinfo .goal').textContent = ACTS[n].goal; $('#actinfo .day').textContent = ACTS[n].day; at0().textContent = ACTS[n].day;
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; at.querySelector('small').textContent = ACTS[n].goal; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
   setTimeout(() => show(at, false), 3400);
@@ -1298,8 +1304,13 @@ function layJuliet(lying) {
   if (lying) { j.position.set(0, 0.92, 0); j.rotation.set(0, Math.PI / 2, 0); inner.rotation.set(-Math.PI / 2, 0, 0); inner.position.set(0, 0.15, 0.95); inner.scale.set(1, 1, 0.55); }
   else { j.rotation.set(0, 0, 0); inner.rotation.set(0, 0, 0); inner.position.set(0, 0, 0); inner.scale.set(1, 1, 1); }
 }
+function earnRoses(n, why) {
+  n = Math.round(n); if (n <= 0) return 0;
+  save.roses += n; runRoses += n; persist(); return n;
+}
 async function endAct(good) {
   phase = 'actEnd';
+  { const r = earnRoses(12 + kills * 0.12 + comboBest * 0.2); floatText(player.x, player.z, `观众扔来 ${r} 朵玫瑰`); throwStuff('🌹', 14); }
   // 怪都安静下来，变成萤火
   for (let i = E.n - 1; i >= 0; i--) killEnemy(i);
   B.n = 0; EB.n = 0; show($('#boss'), false); show($('#calm'), false);
@@ -1309,7 +1320,7 @@ async function endAct(good) {
   if (hero) { player.aimX = 0.45; player.aimZ = -0.9; }
   await sleep(AUTO ? 50 : 1400);
   flushOrbs();
-  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false);
+  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false); crowd.classList.add('hide');
   await playScene(SCENES[act === 5 ? 'tpEnd' : `act${act}End`]);
   phase = 'card';
   stage.classList.add('freeze');
@@ -1348,7 +1359,7 @@ async function tombEnding(good) {
 }
 // 结束画面：标题、一句话、这一局的成绩、按钮
 function endScreen(h1, sub, buttons) {
-  phase = 'over';
+  phase = 'over'; crowd.classList.add('hide');
   recordBest(kills, level);
   const el = $('#over');
   el.querySelector('h1').textContent = h1;
@@ -1359,20 +1370,47 @@ function endScreen(h1, sub, buttons) {
   show(el);
   if (AUTO) setTimeout(() => {}, 0);
 }
+// 结局海报：插图 + "××版《罗密欧与朱丽叶》" + 一句离谱的结局 + 这一局的数字，做成一张图，长按就能保存
+function makePoster(cg, title, line) {
+  return loadImg(`assets/cg/${cg}.jpg`).then((img) => {
+    const W = 900, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    g.fillStyle = '#140f18'; g.fillRect(0, 0, W, H);
+    const s = Math.max(W / img.width, 760 / img.height); g.drawImage(img, (W - img.width * s) / 2, 0, img.width * s, img.height * s);
+    const gr = g.createLinearGradient(0, 520, 0, 800); gr.addColorStop(0, 'rgba(20,15,24,0)'); gr.addColorStop(1, 'rgba(20,15,24,1)'); g.fillStyle = gr; g.fillRect(0, 520, W, 280);
+    g.textAlign = 'center'; g.fillStyle = '#ffd98a'; g.font = '900 44px "Songti SC", "Noto Serif SC", serif';
+    g.fillText(`${save.name || '无名演员'}版`, W / 2, 840); g.font = '900 64px "Songti SC", "Noto Serif SC", serif'; g.fillText(title, W / 2, 920);
+    g.fillStyle = '#fbf3e2'; g.font = '36px "Songti SC", "Noto Serif SC", serif';
+    const words = [...line]; let row = '', y = 1000; for (const ch of words) { if (g.measureText(row + ch).width > W - 120) { g.fillText(row, W / 2, y); row = ''; y += 50; } row += ch; } g.fillText(row, W / 2, y);
+    g.fillStyle = '#d9a441'; g.font = '28px sans-serif';
+    g.fillText(`${level} 级 · 打动 ${kills} 只怪 · 最高连击 ${comboBest} · 伴舞 ${F.n} 个`, W / 2, 1120);
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '24px sans-serif'; g.fillText('莎士比亚的两场戏 · VibeHacks #06', W / 2, 1165);
+    const el = $('#poster'); el.querySelector('img').src = c.toDataURL('image/jpeg', 0.86); show(el);
+  }).catch(() => {});
+}
+function funnyEnding() {
+  const opts = [];
+  if (F.n >= 15) opts.push(`罗密欧带着 ${F.n} 个伴舞去求婚，整个维罗纳跳了一夜的舞。`);
+  if (comboBest >= 60) opts.push(`罗密欧唱了 ${comboBest} 连击，提伯尔特哭着认了亲戚。`);
+  if (kills >= 200) opts.push(`罗密欧用歌声打动了 ${kills} 个仇人，两家合开了一家音乐学院。`);
+  opts.push('罗密欧没有喝毒药，朱丽叶没有拿起短剑。莎士比亚气得把羽毛笔摔了。');
+  return opts[Math.floor(Math.random() * opts.length)];
+}
 function theEnd() {
   save.rj.done = true; persist();
+  setTimeout(() => makePoster('rj-11-sail-away', '《罗密欧与朱丽叶》', funnyEnding()), 400);
   endScreen('第一部 · 全剧终', '这一次，罗密欧和朱丽叶都活了下来。', [['进入第二部 · 暴风雨', () => startStory('tp')], ['回到开始画面', showTitle]]);
 }
 function paintingCardEnd() {
-  if (act === 5) endScreen('第二部 · 第一幕 完', '下一幕正在制作，先演到这里。', [['回到开始画面', showTitle]]);
+  if (act === 5) { endScreen('第二部 · 第一幕 完', '下一幕正在制作，先演到这里。', [['回到开始画面', showTitle]]); setTimeout(() => makePoster('tp-05-reunion', '《暴风雨》', F.n >= 10 ? `罗密欧带着 ${F.n} 个伴舞登上魔法岛，卡利班也跟着跳了起来。` : '罗密欧唱赢了卡利班，在石拱门下找回了朱丽叶。'), 400); }
   else endScreen(`${ACT_NO[act]}幕 完`, '后面的几幕正在制作，先玩到这里。', [['回到开始画面', showTitle]]);
 }
 async function die() {
-  phase = 'dead';
+  phase = 'dead'; throwStuff('🍅', 10);
+  const got = earnRoses(4 + kills * 0.08);
   show($('#bark'), false); show($('#boss'), false);
   await sleep(AUTO ? 50 : 1200);
   show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false);
-  await playScene([['narrator', DEATH[act]]]);
+  await playScene([['narrator', DEATH[act]], ['shakespeare', `看吧，悲剧！……剧本翻回去，重来。不过你记住了这一次：观众扔了 ${got} 朵玫瑰，去"后台"能买永久的本事。`]]);
   const btns = act > 1 ? [['从这一幕重来', 'act'], ['从头开始', 'all']] : [['再来一次', 'all']];
   recordBest(kills, level);
   const btns2 = act === 5 ? [['再来一次', 'act'], ['回到开始画面', 'title']] : [...btns, ['回到开始画面', 'title']];
@@ -1596,7 +1634,7 @@ function step(dt) {
   let crowd = 0;
   forNear(player.x, player.z, 4, (j) => { const dx = E.x[j] - player.x, dz = E.z[j] - player.z; if (dx * dx + dz * dz < 16) crowd++; });
   const boost = player.hp < maxHp() * 0.35 || crowd >= 25 ? 2 : 1;   // 绝境加速
-  stepOrbs(dt, 1.7, boost);   // 10-31 用户要"掉在怪倒下的地方，走过去捡"：萤火留在原地，走到 1.7 米内才飞过来（"轻快"技能捡得远一点）
+  stepOrbs(dt, 1.7 + save.perm.reach * 0.5, boost);   // 10-31 用户要"掉在怪倒下的地方，走过去捡"：萤火留在原地，走到 1.7 米内才飞过来（"轻快"技能捡得远一点）
   stepFx(dt);
   if (pendingLevels > 0 && phase === 'fight') openLevelUp();
 }
@@ -1869,8 +1907,17 @@ function stepCombo(dt) { if (comboT > 0) { comboT -= dt; if (comboT <= 0) comboB
 function cheer(n) {
   const words = ['太动人了！', '全场起立！', '安可！安可！', '莎士比亚都哭了'];
   const el = document.createElement('div'); el.className = 'cheer'; el.textContent = words[Math.min(words.length - 1, [25, 60, 120].indexOf(n) < 0 ? 3 : [25, 60, 120].indexOf(n))];
-  fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600);
+  fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600); throwStuff('🌹', 8); earnRoses(n >= 999 ? 5 : 3);
   [0, 4, 7, 12].forEach((k, j) => tone(nt(k + 12), { t0: j * 0.06, dur: 0.3, vol: 0.04, type: 'triangle' }));
+}
+// 观众：画面最下面一排剪影；玫瑰（演得好）和番茄（被打中）从下面扔上来
+const crowd = document.createElement('div'); crowd.id = 'crowd'; crowd.className = 'hide'; fxLayer.appendChild(crowd);
+function throwStuff(ch, n) {
+  for (let k = 0; k < n; k++) {
+    const el = document.createElement('i'); el.className = 'throw'; el.textContent = ch;
+    el.style.left = (8 + Math.random() * 84) + '%'; el.style.setProperty('--dx', ((Math.random() - 0.5) * 30) + 'vw'); el.style.setProperty('--h', (35 + Math.random() * 35) + 'vh');
+    el.style.animationDelay = (k * 0.06) + 's'; fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600 + k * 60);
+  }
 }
 // 受伤：屏幕边缘红一下
 function flashHurt() { const v = document.getElementById('vignette'); if (!v) return; v.classList.remove('hurt'); void v.offsetWidth; v.classList.add('hurt'); }
@@ -2102,6 +2149,7 @@ function refreshTitle() {
   const hello = $('#title .hello');
   hello.textContent = save.name ? `${save.name}，欢迎回来` + (save.plays ? ` · 已经演了 ${save.plays} 次` : '') : (save.plays ? `欢迎回来 · 已经演了 ${save.plays} 次` : '欢迎来到剧场');
   $('#title .b-name').textContent = save.name ? '改名字' : '起个名字';
+  $('#title .b-shop').textContent = `后台 🌹${save.roses}`;
   const rjb = $('#title .story[data-s=rj] .sb'), tpb = $('#title .story[data-s=tp] .sb');
   const btn = (label, fn, main) => { const b = document.createElement('button'); b.textContent = label; if (main) b.className = 'main'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
   rjb.innerHTML = ''; tpb.innerHTML = '';
@@ -2127,10 +2175,11 @@ $('#cover').onclick = () => {
   if (!AUTO) goFullscreen();
   const c = $('#cover'); c.classList.add('leave'); setTimeout(() => { show(c, false); c.classList.remove('leave'); }, 450);
   refreshTitle(); show($('#title'));
+  if (IN_WX && !STANDALONE && !sessionStorage.getItem('wxg')) { sessionStorage.setItem('wxg', '1'); show($('#wxguide')); }
 };
 { const h = $('#title .fshint'); if (h && h.innerHTML) $('#cover .fshint2').innerHTML = h.innerHTML; }
 function showTitle() {
-  phase = 'title'; resetRun(); setAct(1);
+  phase = 'title'; resetRun(); setAct(1); crowd.classList.add('hide');
   show($('#over'), false); show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false); show($('#boss'), false); show($('#calm'), false);
   titleReady = true; refreshTitle(); show($('#title'));
 }
@@ -2139,6 +2188,29 @@ $('#title .b-name').onclick = () => {
   if (n || n === '') { save.name = n; persist(); refreshTitle(); }
 };
 $('#title .b-how').onclick = () => show($('#how'));
+const SHOP = [
+  { k: 'hp', name: '更结实', desc: '血量 +10', max: 5 }, { k: 'dmg', name: '嗓子更亮', desc: '伤害 +10%', max: 5 },
+  { k: 'fans', name: '老粉丝', desc: '开场就带 2 个伴舞', max: 3 }, { k: 'reach', name: '手更长', desc: '萤火捡得更远', max: 3 },
+];
+const shopCost = (lv) => [20, 45, 80, 130, 200][lv] || 999;
+function openShop() {
+  const el = $('#shop'), box = el.querySelector('.items'); box.innerHTML = '';
+  el.querySelector('.have').textContent = `你有 ${save.roses} 朵玫瑰 🌹`;
+  for (const it of SHOP) {
+    const lv = save.perm[it.k] || 0, c = shopCost(lv), b = document.createElement('button');
+    b.innerHTML = `<b>${it.name}</b><small>${it.desc}</small><em>${lv >= it.max ? '已经满了' : `${lv} / ${it.max} · ${c} 🌹`}</em>`;
+    b.disabled = lv >= it.max || save.roses < c;
+    b.onclick = () => { if (save.roses < c || lv >= it.max) return; save.roses -= c; save.perm[it.k] = lv + 1; persist(); sfxLevel(); openShop(); refreshTitle(); };
+    box.appendChild(b);
+  }
+  show(el);
+}
+$('#title .b-shop').onclick = openShop;
+$('#shop .b-back').onclick = () => show($('#shop'), false);
+$('#poster .b-back').onclick = () => show($('#poster'), false);
+$('#wxguide .b-ok').onclick = () => show($('#wxguide'), false);
+// 微信里打开：第一次进选择页面时教一下怎么全屏（微信的标题栏和底下的前进后退栏，网页去不掉）
+const IN_WX = /MicroMessenger/i.test(navigator.userAgent);
 $('#how .b-back').onclick = () => show($('#how'), false);
 const CG_ALL = ['rj-01-feud', 'rj-02-ball', 'rj-03-first-sight', 'rj-04-palms', 'rj-05-balcony', 'rj-06-wedding', 'rj-07-duel', 'rj-08-mercutio-falls', 'rj-09-potion', 'rj-10-tomb', 'rj-11-sail-away', 'tp-01-storm', 'tp-02-shore', 'tp-03-ariel', 'tp-04-caliban', 'tp-05-reunion'];
 const PAINT_ALL = ['1', '2', '3', 'bad', 'good', 'tpw', 'tp1'];

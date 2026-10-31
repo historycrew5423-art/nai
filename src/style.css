@@ -326,3 +326,27 @@ body.portrait #rotate { display: flex; }
 #fx .hide { display: none !important; }
 #acttitle i.day { display: block; font-style: normal; font-family: var(--serif, serif); font-size: calc(var(--u) * 3); color: #f0c8b8; letter-spacing: .3em; margin-bottom: calc(var(--u) * 1); text-shadow: 0 1px 3px #000; }
 #actinfo span.day { display: block; font-family: var(--serif, serif); font-size: calc(var(--u) * 2.4); color: #ffb4a0; }
+#tools { top: calc(var(--u) * 19); }
+
+/* 观众剪影、扔玫瑰和番茄 */
+#fx #crowd { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 6); opacity: .9;
+  background: radial-gradient(circle at 50% 100%, rgba(8,5,10,.92) 0 46%, transparent 48%) 0 100% / calc(var(--u) * 6.5) calc(var(--u) * 6) repeat-x,
+              radial-gradient(circle at 50% 100%, rgba(20,12,22,.85) 0 46%, transparent 48%) calc(var(--u) * 3.2) 100% / calc(var(--u) * 6.5) calc(var(--u) * 4.4) repeat-x; }
+#fx .throw { position: absolute; bottom: calc(var(--u) * 2); font-style: normal; font-size: calc(var(--u) * 5); animation: throw 1.5s cubic-bezier(.2,.7,.4,1) both; }
+@keyframes throw { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 8% { opacity: 1; } 70% { transform: translate(var(--dx), calc(-1 * var(--h))) rotate(400deg); opacity: 1; } 100% { transform: translate(var(--dx), calc(-1 * var(--h) + 8vh)) rotate(520deg); opacity: 0; } }
+/* 后台（买永久本事）、结局海报、微信全屏提示 */
+#shop, #poster, #wxguide { position: absolute; inset: 0; background: rgba(10,8,14,.88); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #f2ede4; z-index: 8; }
+#shop .inner { width: 80%; }
+#shop .have { font-size: calc(var(--u) * 3.4); color: #ffb4c0; margin: 0 0 calc(var(--u) * 2); }
+#shop .items { display: flex; gap: calc(var(--u) * 2); justify-content: center; }
+#shop .items button { width: calc(var(--u) * 30); padding: calc(var(--u) * 2); display: flex; flex-direction: column; gap: calc(var(--u) * 1); font-family: var(--serif, serif); color: #f2ede4;
+  background: linear-gradient(180deg, rgba(48,34,52,.96), rgba(20,14,24,.97)); border: 1px solid #c99a4a; border-radius: calc(var(--u) * 1.2); }
+#shop .items button b { font-size: calc(var(--u) * 3.6); color: #ffd98a; } #shop .items button small { font-size: calc(var(--u) * 2.6); } #shop .items button em { font-style: normal; font-size: calc(var(--u) * 2.4); color: #ffb4c0; }
+#shop .items button:disabled { opacity: .45; }
+#shop .note { font-size: calc(var(--u) * 2.4); opacity: .75; margin: calc(var(--u) * 2.4) auto; max-width: 70%; }
+#shop .btns button, #poster .btns button, #wxguide .btns button { font-family: inherit; font-size: calc(var(--u) * 3); color: #2a1a10; background: linear-gradient(180deg, #ffe7a8, #d9a441); border: 0; border-radius: 99px; padding: calc(var(--u) * 1) calc(var(--u) * 4); }
+#poster img { max-height: 76%; max-width: 60%; border: 2px solid #c99a4a; box-shadow: 0 0 calc(var(--u) * 4) rgba(255,180,90,.35); }
+#poster p { font-size: calc(var(--u) * 2.8); margin: calc(var(--u) * 1.6) 0; }
+#wxguide h2 { font-family: var(--serif, serif); font-size: calc(var(--u) * 6); color: #ffd98a; margin: 0 0 calc(var(--u) * 2); }
+#wxguide p { font-size: calc(var(--u) * 3.2); line-height: 1.7; margin: 0 0 calc(var(--u) * 3); } #wxguide b { color: #ffd98a; }
+#wxguide .arrow { position: absolute; right: calc(var(--u) * 4); top: calc(var(--u) * 1); font-size: calc(var(--u) * 12); color: #ffd98a; animation: blink 1s infinite; }

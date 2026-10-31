@@ -10,6 +10,7 @@ function defaults() {
     tp: { reached: 5, snaps: {} },        // 第二部 暴风雨：从第 5 幕算起
     paintings: [], cgs: [], endings: [], choices: [],
     best: { kills: 0, level: 1 },
+    roses: 0, perm: { hp: 0, dmg: 0, fans: 0, reach: 0 },   // 玫瑰：观众扔的，在后台买永久的本事（死了也留着）
   };
 }
 
@@ -18,7 +19,7 @@ function load() {
     const d = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (!d) return defaults();
     const base = defaults();
-    return { ...base, ...d, rj: { ...base.rj, ...d.rj }, tp: { ...base.tp, ...d.tp }, best: { ...base.best, ...d.best } };
+    return { ...base, ...d, rj: { ...base.rj, ...d.rj }, tp: { ...base.tp, ...d.tp }, best: { ...base.best, ...d.best }, perm: { ...base.perm, ...(d.perm || {}) } };
   } catch { return defaults(); }
 }
 
