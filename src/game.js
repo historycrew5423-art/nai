@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031f';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031f';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031f';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031f';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031f';
+import { Input } from './input.js?v=20261031g';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031g';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031g';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031g';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031g';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -734,7 +734,8 @@ let hero = null, juliet = null, tybalt = null, mercutio = null, caliban = null;
 // ---------- 数据 ----------
 const E = { n: 0, type: new Uint8Array(MAX_E), x: new Float32Array(MAX_E), z: new Float32Array(MAX_E), hp: new Float32Array(MAX_E),
   flash: new Float32Array(MAX_E), phase: new Float32Array(MAX_E), speed: new Float32Array(MAX_E), id: new Int32Array(MAX_E),
-  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E), wind: new Float32Array(MAX_E) };
+  ocd: new Float32Array(MAX_E), face: new Int8Array(MAX_E), atk: new Float32Array(MAX_E), wind: new Float32Array(MAX_E),
+  elite: new Uint8Array(MAX_E), sk: new Float32Array(MAX_E), st: new Float32Array(MAX_E), state: new Uint8Array(MAX_E), ddx: new Float32Array(MAX_E), ddz: new Float32Array(MAX_E) };   // 精英怪、技能冷却、技能状态（1 蓄力 2 冲刺 3 晕）、冲刺方向
 // 怪射来的酸音（号角怪）
 const MAX_EB = 240;
 const EB = { n: 0, x: new Float32Array(MAX_EB), z: new Float32Array(MAX_EB), dx: new Float32Array(MAX_EB), dz: new Float32Array(MAX_EB), life: new Float32Array(MAX_EB) };
@@ -749,13 +750,13 @@ let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevel
 let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
 let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
-const maxHp = () => 100 + stats.maxHpBonus;
-const xpNeed = (L) => (L === 1 ? 3 : Math.round(4 * Math.pow(L, 1.45)));   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
+const maxHp = () => 60 + stats.maxHpBonus;   // 10-31 用户说太简单、血多：100 → 60
+const xpNeed = (L) => (L === 1 ? 4 : Math.round(7 * Math.pow(L, 1.5)));   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
 const input = new Input();
 
 function resetRun() {
   E.n = B.n = O.n = 0;
-  player.x = player.z = 0; player.hp = 100; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
+  player.x = player.z = 0; player.hp = 60; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
   stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0;
   time = actTime = 0; fireCd = drumCd = slowmo = 0; lineIdx = 0; saidLow = false; firstLevelSaid = false; birdWaves = 0;
   act = 1; snapshot = null;
@@ -774,7 +775,8 @@ function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
   E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.wind[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
-  E.hp[i] = t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0);
+  E.hp[i] = (t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0)) * (t.boss ? 1.2 : 1.4);
+  E.elite[i] = 0; E.sk[i] = 1.5 + Math.random() * 3; E.st[i] = 0; E.state[i] = 0;
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3); E.id[i] = nextId++;
 }
 const lowHp = () => player.hp < maxHp() * 0.35;
@@ -784,8 +786,8 @@ function director(dt) {
   if (act === 3) { director3(dt); return; }
   if (act === 4) { director4(dt); return; }
   if (act === 5) { director5(dt); return; }
-  const target = act1Target(actTime) * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点
-  spawnAcc += dt * (actTime < 20 ? 2 : 6);
+  const target = act1Target(actTime) * 0.6 * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点；10-31 怪少一些、更凶
+  spawnAcc += dt * (actTime < 20 ? 1.5 : 4);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
   // 鸟嘴面具客人：第 25 秒起，每 6 秒从一个方向冲来一小群
   if (actTime > 25 + birdWaves * 6 && actTime < ACT_LEN - 3) {
@@ -799,8 +801,8 @@ function director(dt) {
 const DOG_AT = Math.min(22, ACT_LEN * 0.5);
 function director2(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (22 + actTime * 0.8) * (boss ? 0.45 : 1) * (lowHp() ? 0.75 : 1);
-  spawnAcc += dt * 7;
+  const target = (22 + actTime * 0.8) * 0.6 * (boss ? 0.45 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 5;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(Math.random() < 0.28 ? T.drum : T.lute); }
   if (!boss && actTime > 5 + birdWaves * 7) {
     birdWaves++;
@@ -818,8 +820,8 @@ const count = (ty) => { let c = 0; for (let i = 0; i < E.n; i++) if (E.type[i] =
 // 第三幕：两家的人潮最多最厚，号角怪站在远处吹酸音；第 18 秒茂丘西奥倒下，第 22 秒提伯尔特出场
 function director3(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (30 + actTime * 0.9) * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
-  spawnAcc += dt * 8;
+  const target = (30 + actTime * 0.9) * 0.6 * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 5.5;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
     const r = Math.random();
@@ -846,8 +848,8 @@ function director3(dt) {
 // 第二部「漂岛」：被冲上岸的乐器、成群的海鸟、海浪精灵（亡魂的样子），第 22 秒卡利班出场
 function director5(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
-  spawnAcc += dt * 6;
+  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * 0.6 * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 4.5;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n >= target) continue; const r = Math.random(); spawnEnemy(r < 0.4 ? T.shade : r < 0.75 ? T.lute : T.drum); }
   if (!boss && actTime > 8 + birdWaves * 7) {
     birdWaves++;
@@ -863,8 +865,8 @@ function director5(dt) {
 }
 // 第四幕：亡魂从四面八方涌向石台上的朱丽叶，也有一些家丁冲着罗密欧来
 function director4(dt) {
-  const target = (16 + actTime * 0.9) * (lowHp() ? 0.8 : 1);
-  spawnAcc += dt * 6;
+  const target = (16 + actTime * 0.9) * 0.7 * (lowHp() ? 0.8 : 1);
+  spawnAcc += dt * 4.5;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
     if (Math.random() < 0.85) spawnEnemy(T.shade, undefined, 17 + Math.random() * 4, 0, 0);
@@ -881,7 +883,8 @@ function killEnemy(i) {
     ring(E.x[i], E.z[i], 6, 0.8);
   } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
-  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind]) a[i] = a[j];
+  if (E.elite[i]) dropChest(E.x[i], E.z[i]);
+  for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind, E.elite, E.sk, E.st, E.state, E.ddx, E.ddz]) a[i] = a[j];
   sfxPop(t.boss);
   kills++; comboAdd();
   if (t.boss) { shake = Math.max(shake, 1.1); hitStop = 0.25; } else if (t.hp >= 9) { shake = Math.max(shake, 0.35); hitStop = Math.max(hitStop, 0.05); }
@@ -891,6 +894,7 @@ function removeBullet(i) {
   for (const a of [B.x, B.z, B.dx, B.dz, B.life, B.dmg, B.pierce, B.bounce, B.size, B.last]) a[i] = a[j];
 }
 function hurtEnemy(i, dmg, kx = 0, kz = 0) {
+  if (E.state[i] === 3) dmg *= 2;   // 撞晕的提伯尔特挨打加倍
   E.hp[i] -= dmg; E.flash[i] = 0.09;
   popNumber(E.x[i], E.z[i], dmg, TYPES[E.type[i]].boss);
   if (TYPES[E.type[i]].boss) { kx *= 0.08; kz *= 0.08; }   // 三头犬推不太动
@@ -1259,8 +1263,9 @@ function beginAct(n, retry) {
   }
   E.n = B.n = O.n = 0; if (retry) pendingLevels = 0;   // 上一幕结束时攒下的升级，这一幕一开打就选
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
-  if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.35);   // 每一幕开头回一点血
+  if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.15);   // 每一幕开头只回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
+  clearChests(); eliteT = 0; casting = 0; player.conf = 0;
   dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
   if (juliet) { juliet.visible = false; layJuliet(false); }
   if (tybalt) tybalt.visible = false;
@@ -1379,7 +1384,8 @@ function step(dt) {
   const fighting = phase === 'fight';
 
   // 主角移动
-  const mv = input.getMove(), mag = Math.hypot(mv.x, mv.y), mvOn = mag > 0.2;   // 摇杆推得很轻时不动（原来会"站着不动却在挪"）
+  const mv0 = input.getMove(), conf = player.conf > 0 ? -1 : 1, mv = { x: mv0.x * conf, y: mv0.y * conf }, mag = Math.hypot(mv.x, mv.y), mvOn = mag > 0.2;   // 被亡魂附身：方向反过来
+  if (player.conf > 0) player.conf -= dt;   // 摇杆推得很轻时不动（原来会"站着不动却在挪"）
   const canMove = fighting || phase === 'title';
   if (canMove && phase !== 'title' && mvOn) {
     const sp = 6.4 * stats.speedMul;
@@ -1423,6 +1429,8 @@ function step(dt) {
   }
 
   director(dt);
+  if (fighting) { stepElites(dt); stepHazards(dt); if (phase !== 'fight') return; }
+  stepChests();
 
   // 怪：朝主角走，互相推开，绕开障碍物
   const early = act === 1 && actTime < 20 ? 0.35 : 1;   // 第一幕前 20 秒怪几乎打不疼人
@@ -1442,13 +1450,32 @@ function step(dt) {
       if (fighting && gd < reach + 0.15 && E.atk[i] <= 0) { E.atk[i] = 1.0; calm -= 2.4; E.flash[i] = 0.05; calmHit = 0.25; }
       continue;
     }
-    let sp = E.speed[i] * (t.boss && bossCharge > 0 ? 3.2 : 1);
+    let sp = E.speed[i] * (t.key === 'cerberus' && bossCharge > 0 ? 3.2 : 1);
     if (t.ranged) {   // 号角怪：站在 7 到 9 米外，每隔两三秒吹一发酸音
       if (d < 7) sp = -sp * 0.6; else if (d < 9) sp = 0;
       if (fighting && d < 13 && E.atk[i] <= 0 && EB.n < MAX_EB) {
         E.atk[i] = 2.4 + Math.random() * 1.2;
-        const k = EB.n++; EB.x[k] = E.x[i]; EB.z[k] = E.z[i]; EB.dx[k] = dx / d * 5; EB.dz[k] = dz / d * 5; EB.life[k] = 3.2;   // 慢一点，看得见、躲得开
+        for (const off of [-0.32, 0, 0.32]) { if (EB.n >= MAX_EB) break; const k = EB.n++, a0 = Math.atan2(dx, dz) + off; EB.x[k] = E.x[i]; EB.z[k] = E.z[i]; EB.dx[k] = Math.sin(a0) * 5; EB.dz[k] = Math.cos(a0) * 5; EB.life[k] = 3.2; }   // 扇形三发，慢一点，看得见、躲得开
       }
+    }
+    // 怪物技能：先在地上出红色提示，到时间才判定，跑开就躲得掉（10-31 用户要"怪物放技能，能跑掉要躲"）
+    if (fighting) {
+      if (E.sk[i] > 0) E.sk[i] -= dt;
+      const st = E.state[i];
+      if (st === 1) { E.st[i] -= dt; sp = 0; if (E.st[i] <= 0) { E.state[i] = t.key === 'birdhead' || t.key === 'tybalt' ? 2 : 0; E.st[i] = t.key === 'tybalt' ? 0.9 : 0.32; } }
+      else if (st === 2) {   // 冲刺：鸟嘴面具、提伯尔特（斗牛）
+        const v = t.key === 'tybalt' ? 17 : 22; E.st[i] -= dt; sp = 0;
+        const ox = E.x[i], oz = E.z[i]; E.x[i] += E.ddx[i] * v * dt; E.z[i] += E.ddz[i] * v * dt;
+        tmp.x = E.x[i]; tmp.z = E.z[i]; pushOut(tmp, t.r);
+        const blocked = Math.hypot(tmp.x - E.x[i], tmp.z - E.z[i]) > 0.05; E.x[i] = tmp.x; E.z[i] = tmp.z;
+        if (Math.hypot(player.x - E.x[i], player.z - E.z[i]) < player.r + t.r + 0.2 && player.hurtCd <= 0 && !GOD) { player.hp -= t.dmg * (t.boss ? 1.3 : 1); player.hurtCd = 0.6; sfxHurt(); if (player.hp <= 0) { player.hp = 0; die(); return; } }
+        if (t.key === 'tybalt' && blocked) { E.state[i] = 3; E.st[i] = 2.6; shake = Math.max(shake, 0.9); sfxBonk(); floatText(E.x[i], E.z[i], '眼冒金星！'); }
+        else if (E.st[i] <= 0) E.state[i] = 0;
+        if (ox === E.x[i] && oz === E.z[i]) E.state[i] = 0;
+        continue;
+      } else if (st === 3) { E.st[i] -= dt; if (E.st[i] <= 0) E.state[i] = 0; continue; }   // 晕：站着不动，挨打加倍
+      else if (E.sk[i] <= 0 && E.wind[i] <= 0) castSkill(i, t, d, dx, dz);
+      if (E.state[i] === 1) sp = 0;
     }
     // 10-31 用户说小怪"自动攻击、必中、躲不掉"：改成先蓄力（变红、停下、鼓起来）再扑，蓄力时走开就打不中
     if (E.wind[i] > 0) {
@@ -1627,6 +1654,128 @@ async function openLevelUp() {
   if (phase === 'levelup') phase = 'fight';
 }
 
+// ---------- 怪物技能和地上的红色提示 ----------
+// HZ：提示区域。kind 0 = 圆（x, z, r），1 = 长条（从 x, z 朝 ang 方向，长 len、半宽 r）。warn 秒后判定一次
+const MAX_HZ = 48;
+const HZ = { n: 0, kind: new Uint8Array(MAX_HZ), x: new Float32Array(MAX_HZ), z: new Float32Array(MAX_HZ), r: new Float32Array(MAX_HZ), len: new Float32Array(MAX_HZ), ang: new Float32Array(MAX_HZ),
+  t: new Float32Array(MAX_HZ), warn: new Float32Array(MAX_HZ), dmg: new Float32Array(MAX_HZ), fx: new Uint8Array(MAX_HZ) };
+function hazard(kind, x, z, r, warn, dmg, ang = 0, len = 0, fx = 0) {
+  if (HZ.n >= MAX_HZ) return; const k = HZ.n++;
+  HZ.kind[k] = kind; HZ.x[k] = x; HZ.z[k] = z; HZ.r[k] = r; HZ.warn[k] = warn; HZ.t[k] = 0; HZ.dmg[k] = dmg; HZ.ang[k] = ang; HZ.len[k] = len; HZ.fx[k] = fx;
+}
+function inHazard(k, px, pz, pr) {
+  const dx = px - HZ.x[k], dz = pz - HZ.z[k];
+  if (HZ.kind[k] === 0) return dx * dx + dz * dz < (HZ.r[k] + pr) * (HZ.r[k] + pr);
+  const ux = Math.sin(HZ.ang[k]), uz = Math.cos(HZ.ang[k]), along = dx * ux + dz * uz, side = Math.abs(dx * uz - dz * ux);
+  return along > -pr && along < HZ.len[k] + pr && side < HZ.r[k] + pr;
+}
+function stepHazards(dt) {
+  for (let k = HZ.n - 1; k >= 0; k--) {
+    HZ.t[k] += dt;
+    if (HZ.t[k] < HZ.warn[k]) continue;
+    if (HZ.dmg[k] > 0 && inHazard(k, player.x, player.z, player.r) && player.hurtCd <= 0 && !GOD && phase === 'fight') {
+      player.hp -= HZ.dmg[k]; player.hurtCd = 0.6; sfxHurt();
+      if (HZ.fx[k] === 2) { player.conf = 1.6; floatText(player.x, player.z, '被附身！方向反了'); }
+      if (player.hp <= 0) { player.hp = 0; HZ.n = 0; die(); return; }
+    }
+    if (HZ.kind[k] === 0 && HZ.fx[k] !== 2) { ring(HZ.x[k], HZ.z[k], HZ.r[k] * 1.1, 0.35); if (HZ.r[k] > 1.5) { sfxSlam(); shake = Math.max(shake, 0.35); } }
+    HZ.n--; for (const a of [HZ.kind, HZ.x, HZ.z, HZ.r, HZ.len, HZ.ang, HZ.t, HZ.warn, HZ.dmg, HZ.fx]) a[k] = a[HZ.n];
+  }
+}
+let casting = 0;   // 同一时间最多几只鸟嘴面具在瞄准，免得满屏红线
+function castSkill(i, t, d, dx, dz) {
+  const k = t.key;
+  if (k === 'drum' && d < 6) {   // 鼓怪：跳起来用肚子砸地，红圈落在罗密欧脚下
+    hazard(0, player.x, player.z, 2.1, 0.95, t.dmg); E.state[i] = 1; E.st[i] = 0.95; E.sk[i] = 5 + Math.random() * 2;
+  } else if (k === 'lute' && d < 3.2) {   // 琴怪：弹一声走音，自己周围一圈声波
+    hazard(0, E.x[i], E.z[i], 2.4, 0.75, t.dmg * 0.8); E.state[i] = 1; E.st[i] = 0.75; E.sk[i] = 5 + Math.random() * 3;
+  } else if (k === 'birdhead' && d < 10 && d > 3 && casting < 3) {   // 鸟嘴面具：先瞄一条红线，再啄着冲过去
+    const ux = dx / d, uz = dz / d; E.ddx[i] = ux; E.ddz[i] = uz;
+    hazard(1, E.x[i], E.z[i], 0.6, 0.7, t.dmg, Math.atan2(ux, uz), 10); E.state[i] = 1; E.st[i] = 0.7; E.sk[i] = 6 + Math.random() * 3;
+    casting++; setTimeout(() => casting--, 1100);
+  } else if (k === 'shade' && d > 5 && d < 14 && act !== 4) {   // 亡魂：一闪出现在罗密欧身边，碰到会被附身（方向反过来）
+    const a = Math.random() * Math.PI * 2; E.x[i] = player.x + Math.sin(a) * 2.6; E.z[i] = player.z + Math.cos(a) * 2.6; ring(E.x[i], E.z[i], 1.2, 0.4);
+    hazard(0, E.x[i], E.z[i], 1.5, 0.75, t.dmg * 0.5, 0, 0, 2); E.state[i] = 1; E.st[i] = 0.75; E.sk[i] = 7 + Math.random() * 3;
+  } else if (k === 'tybalt' && d < 15) {   // 提伯尔特：斗牛。刨地、喷鼻气、地上一条红线，然后直冲过来；撞到柱子会晕
+    const ux = dx / d, uz = dz / d; E.ddx[i] = ux; E.ddz[i] = uz;
+    hazard(1, E.x[i], E.z[i], 1.1, 0.95, 0, Math.atan2(ux, uz), 15); E.state[i] = 1; E.st[i] = 0.95; E.sk[i] = 4.5; sfxSnort(); floatText(E.x[i], E.z[i], '哞——！');
+  } else if ((k === 'cerberus' || k === 'caliban') && d < 12) {   // 三头犬、卡利班：连砸三下
+    for (let j = 0; j < 3; j++) { const a = Math.random() * Math.PI * 2, r = j === 0 ? 0 : 2.4; hazard(0, player.x + Math.sin(a) * r, player.z + Math.cos(a) * r, 2.0, 0.9 + j * 0.35, t.dmg * 0.8); }
+    E.state[i] = 1; E.st[i] = 1.2; E.sk[i] = 4.5;
+  } else E.sk[i] = 0.6;
+}
+// 地上的提示：半透明红圈（外圈 + 随时间长满的内圈）、红色长条
+const hzTex = canvasTex(128, (g, s) => { g.fillStyle = 'rgba(255,60,50,.28)'; g.beginPath(); g.arc(s / 2, s / 2, s / 2 - 4, 0, Math.PI * 2); g.fill(); g.strokeStyle = 'rgba(255,90,70,.95)'; g.lineWidth = 6; g.stroke(); });
+const hzFillTex = canvasTex(128, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(255,70,50,.15)'); r.addColorStop(0.85, 'rgba(255,70,50,.55)'); r.addColorStop(1, 'rgba(255,70,50,0)'); g.fillStyle = r; g.fillRect(0, 0, s, s); });
+const hzLineTex = canvasTex(64, (g, s) => { g.fillStyle = 'rgba(255,60,50,.35)'; g.fillRect(0, 0, s, s); g.fillStyle = 'rgba(255,100,80,.95)'; g.fillRect(0, 0, 5, s); g.fillRect(s - 5, 0, 5, s); });
+const hzMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
+const hzRing = flatInst(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), hzMat(hzTex), MAX_HZ), hzFill = flatInst(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), hzMat(hzFillTex), MAX_HZ);
+const hzLine = flatInst(new THREE.PlaneGeometry(1, 1).translate(0, -0.5, 0).rotateX(-Math.PI / 2), hzMat(hzLineTex), MAX_HZ);
+hzRing.renderOrder = hzFill.renderOrder = hzLine.renderOrder = 1;
+const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v4 = new THREE.Vector3(), s4 = new THREE.Vector3(), Y4 = new THREE.Vector3(0, 1, 0);
+function drawHazards() {
+  let nr = 0, nl = 0;
+  for (let k = 0; k < HZ.n; k++) {
+    const f = Math.min(1, HZ.t[k] / HZ.warn[k]);
+    if (HZ.kind[k] === 0) {
+      writeMatrix(hzRing.instanceMatrix.array, nr, HZ.x[k], 0.04, HZ.z[k], HZ.r[k], 1, HZ.r[k]);
+      writeMatrix(hzFill.instanceMatrix.array, nr, HZ.x[k], 0.05, HZ.z[k], HZ.r[k] * f, 1, HZ.r[k] * f); nr++;
+    } else {
+      q4.setFromAxisAngle(Y4, HZ.ang[k]); m4.compose(v4.set(HZ.x[k], 0.04, HZ.z[k]), q4, s4.set(HZ.r[k] * 2, 1, HZ.len[k] * (0.3 + 0.7 * f)));
+      m4.toArray(hzLine.instanceMatrix.array, nl * 16); nl++;
+    }
+  }
+  hzRing.count = hzFill.count = nr; hzLine.count = nl;
+  hzRing.instanceMatrix.needsUpdate = hzFill.instanceMatrix.needsUpdate = hzLine.instanceMatrix.needsUpdate = true;
+}
+// 飘在头上的字（"眼冒金星！""哞——！"）
+function floatText(x, z, text) {
+  const el = document.createElement('div'); el.className = 'ftext'; el.textContent = text; const [sx, sy] = toScreen(x, 2.6, z);
+  el.style.left = sx + '%'; el.style.top = sy + '%'; fxLayer.appendChild(el); setTimeout(() => el.remove(), 1300);
+}
+function sfxSlam() { if (gate('slam', 90)) { tone(110, { dur: 0.3, vol: 0.1, to: 45 }); burst({ dur: 0.25, vol: 0.07, freq: 400, type: 'lowpass' }); } }
+function sfxBonk() { tone(880, { dur: 0.12, vol: 0.06, type: 'square', to: 220 }); [0, 0.12, 0.24].forEach((t0) => tone(1760, { t0, dur: 0.1, vol: 0.03, type: 'triangle' })); }
+function sfxSnort() { burst({ dur: 0.35, vol: 0.07, freq: 700, q: 0.8 }); burst({ t0: 0.4, dur: 0.3, vol: 0.06, freq: 600, q: 0.8 }); }
+
+// ---------- 精英怪（金色、头上有冠）和宝箱 ----------
+const crownTex = canvasTex(128, (g, s) => { g.font = `${s * 0.7}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowColor = '#ffb030'; g.shadowBlur = 16; g.fillStyle = '#ffd860'; g.fillText('♛', s / 2, s / 2); });
+const crownMesh = flatInst(billboardGeo(1, 1, true), additive(crownTex), 32);
+const CH = [];   // 宝箱：{ m, x, z }
+const chestMats = { wood: new THREE.MeshLambertMaterial({ color: 0xa4602a }), gold: new THREE.MeshLambertMaterial({ color: 0xffc23a, emissive: 0x6a4000 }) };
+function dropChest(x, z) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.6), chestMats.wood); b.position.y = 0.3;
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), chestMats.wood); lid.position.y = 0.58;
+  const band = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.08, 0.64), chestMats.gold); band.position.y = 0.58;
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6).rotateX(-Math.PI / 2), additive(glowTex('255,200,90'), 0.8)); glow.position.y = 0.03;
+  for (const o of [b, lid, band]) o.castShadow = true;
+  g.add(b, lid, band, glow); g.position.set(x, 0, z); scene.add(g); CH.push({ m: g, x, z });
+  floatText(x, z, '宝箱！');
+}
+function stepChests() {
+  for (let k = CH.length - 1; k >= 0; k--) {
+    const c = CH[k]; c.m.rotation.y = time * 1.5; c.m.position.y = Math.abs(Math.sin(time * 3)) * 0.15;
+    if (phase === 'fight' && Math.hypot(player.x - c.x, player.z - c.z) < 1.3) { scene.remove(c.m); CH.splice(k, 1); openChest(); }
+  }
+}
+function clearChests() { for (const c of CH) scene.remove(c.m); CH.length = 0; HZ.n = 0; }
+async function openChest() {   // 宝箱：挑一首歌，直接升两级
+  phase = 'levelup'; sfxLevel(); shake = Math.max(shake, 0.4);
+  await sleep(AUTO ? 10 : 250);
+  const id = await chooseCards('打开宝箱！挑一首歌，直接升两级', false);
+  if (id && (levels[id] || 0) < byId[id].max) takeSkill(id);
+  if (phase === 'levelup') phase = 'fight';
+}
+let eliteT = 0;
+function stepElites(dt) {   // 每 22 秒来一只精英怪（这一幕的普通怪，血多 6 倍、个头大、金色、头上有冠），打倒掉宝箱
+  eliteT += dt;
+  if (eliteT < 22 || E.n >= MAX_E) return;
+  eliteT = 0;
+  const ty = act === 4 ? T.shade : act === 5 ? (Math.random() < 0.5 ? T.drum : T.lute) : act === 1 ? T.lute : T.drum;
+  spawnEnemy(ty); const i = E.n - 1; E.elite[i] = 1; E.hp[i] *= 6; E.speed[i] *= 0.8;
+  bark('romeo', '金色的那个……打倒它有好东西！');
+}
+
 // ---------- 手感：震屏、顿帧、伤害数字、连击、脚下的小烟 ----------
 let shake = 0, hitStop = 0, combo = 0, comboT = 0, comboBest = 0;
 const fxLayer = document.createElement('div'); fxLayer.id = 'fx'; stage.appendChild(fxLayer);
@@ -1680,6 +1829,8 @@ const camTarget = new THREE.Vector3(), shakeV = new THREE.Vector3();
 let camDist = 1;
 function draw(dt) {
   stepDust(dt); if (phase === 'fight') stepCombo(dt);
+  drawHazards();
+  { let nc = 0; const cm = crownMesh.instanceMatrix.array; for (let i = 0; i < E.n && nc < 32; i++) if (E.elite[i]) writeMatrix(cm, nc++, E.x[i], TYPES[E.type[i]].h * 1.55 + 0.5 + Math.sin(time * 4) * 0.1, E.z[i], 0.9, 0.9, 0.9); crownMesh.count = nc; crownMesh.instanceMatrix.needsUpdate = true; }
   counts.fill(0); fcounts.fill(0);
   const sm = shadowMesh.instanceMatrix.array;
   for (let i = 0; i < E.n; i++) {
@@ -1690,7 +1841,10 @@ function draw(dt) {
         bm.visible = true; bm.position.set(E.x[i], 0, E.z[i]);
         bm.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]) + (bm.userData.yaw || 0);
         const near = E.wind[i] > 0 || Math.hypot(player.x - E.x[i], player.z - E.z[i]) < 1.6;
-        playAnim(bm, near && bm.userData.actions?.slash ? 'slash' : bossCharge > 0 && bm.userData.actions?.run ? 'run' : 'walk', { speed: near ? 1.6 : 1 });
+        const bst = E.state[i];
+        playAnim(bm, bst === 3 ? 'idle' : bst === 2 ? 'run' : bst === 1 ? 'idle' : near && bm.userData.actions?.slash ? 'slash' : bossCharge > 0 && bm.userData.actions?.run ? 'run' : 'walk', { speed: bst === 2 ? 1.8 : near ? 1.6 : 1 });
+        if (bst === 1 || bst === 2) bm.rotation.y = Math.atan2(E.ddx[i], E.ddz[i]);
+        bm.userData.inner.rotation.z = bst === 3 ? Math.sin(time * 8) * 0.12 : 0;   // 撞晕了晃脑袋
         bm.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : E.wind[i] > 0 ? 1.08 : 1);
         if (!bm.userData.actions) bm.userData.inner.position.y = Math.abs(Math.sin(time * 6)) * 0.15;
       }
@@ -1705,9 +1859,10 @@ function draw(dt) {
       const dx = (t.ghost && act === 4 ? -E.x[i] : player.x - E.x[i]), dz = (t.ghost && act === 4 ? -E.z[i] : player.z - E.z[i]);
       const yaw = Math.atan2(dx, dz);
       const bob = mf.n === 1 ? (t.ghost ? 0.25 + Math.sin(time * 3 + E.phase[i]) * 0.15 : Math.abs(Math.sin(time * 9 + E.phase[i])) * 0.15) : 0;
-      writeMatrixY(fm.instanceMatrix.array, k2, E.x[i], bob, E.z[i], E.wind[i] > 0 ? 1.12 : 1, yaw + (mf.n === 1 && !t.ghost ? Math.sin(time * 9 + E.phase[i]) * 0.12 : 0));
+      writeMatrixY(fm.instanceMatrix.array, k2, E.x[i], bob + (E.state[i] === 1 && t.key === 'drum' ? Math.min(1.2, (0.9 - E.st[i]) * 2) : 0), E.z[i], (E.wind[i] > 0 || E.state[i] === 1 ? 1.12 : 1) * (E.elite[i] ? 1.55 : 1), yaw + (mf.n === 1 && !t.ghost ? Math.sin(time * 9 + E.phase[i]) * 0.12 : 0));
       const fl = E.flash[i] > 0 ? 2.4 : 1, w = E.wind[i] > 0 ? 0.5 + 0.5 * Math.sin(time * 40) : 0, col = fm.instanceColor.array;
       col[k2 * 3] = fl + w * 1.6; col[k2 * 3 + 1] = fl * (1 - w * 0.6); col[k2 * 3 + 2] = fl * (1 - w * 0.6);   // 蓄力时闪红
+      if (E.elite[i]) { col[k2 * 3] *= 1.5; col[k2 * 3 + 1] *= 1.25; col[k2 * 3 + 2] *= 0.55; }   // 精英怪金色
       writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
       continue;
     }

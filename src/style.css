@@ -320,3 +320,7 @@ body.portrait #rotate { display: flex; }
 @keyframes cheer { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4) rotate(-6deg); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(2deg); } 30% { transform: translate(-50%, -50%) scale(1) rotate(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1); } }
 #vignette.hurt { animation: hurtflash .45s ease-out; }
 @keyframes hurtflash { 0% { box-shadow: inset 0 0 calc(var(--u) * 14) rgba(220, 30, 40, .85); } 100% { box-shadow: inset 0 0 calc(var(--u) * 14) rgba(220, 30, 40, 0); } }
+#fx .ftext { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: 900 calc(var(--u) * 3.6) var(--serif, serif); color: #fff3c8;
+  text-shadow: 0 0 calc(var(--u) * 1) rgba(255, 120, 40, .9), 0 2px 2px #000; animation: ftext 1.3s ease-out forwards; }
+@keyframes ftext { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.5); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -140%) scale(1); } }
+#fx .hide { display: none !important; }
