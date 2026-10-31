@@ -324,3 +324,5 @@ body.portrait #rotate { display: flex; }
   text-shadow: 0 0 calc(var(--u) * 1) rgba(255, 120, 40, .9), 0 2px 2px #000; animation: ftext 1.3s ease-out forwards; }
 @keyframes ftext { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.5); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -140%) scale(1); } }
 #fx .hide { display: none !important; }
+#acttitle i.day { display: block; font-style: normal; font-family: var(--serif, serif); font-size: calc(var(--u) * 3); color: #f0c8b8; letter-spacing: .3em; margin-bottom: calc(var(--u) * 1); text-shadow: 0 1px 3px #000; }
+#actinfo span.day { display: block; font-family: var(--serif, serif); font-size: calc(var(--u) * 2.4); color: #ffb4a0; }

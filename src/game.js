@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031g';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031g';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031g';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031g';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031g';
+import { Input } from './input.js?v=20261031h';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031h';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031h';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031h';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031h';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -757,7 +757,7 @@ const input = new Input();
 function resetRun() {
   E.n = B.n = O.n = 0;
   player.x = player.z = 0; player.hp = 60; player.hurtCd = 0; player.aimX = 0; player.aimZ = 1;
-  stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0;
+  stats = baseStats(); levels = {}; level = 1; xp = 0; kills = 0; pendingLevels = 0; F.n = 0;
   time = actTime = 0; fireCd = drumCd = slowmo = 0; lineIdx = 0; saidLow = false; firstLevelSaid = false; birdWaves = 0;
   act = 1; snapshot = null;
   if (tybalt) tybalt.visible = false;
@@ -835,6 +835,8 @@ function director3(dt) {
   const fallAt = Math.min(18, ACT_LEN * 0.4), bossAt = Math.min(22, ACT_LEN * 0.5);
   if (!mercFell && actTime >= fallAt) {
     mercFell = true; slowmo = 1.2;
+    hemi.intensity *= 0.6; moon.color.setHex(0xff5040); scene.background.setHex(0x1a0c10); scene.fog.color.setHex(0x1a0c10);   // 茂丘西奥倒下：天暗下来，变成血红色，音乐转小调
+    setTimeout(() => { if (act === 3 && phase === 'fight') bark('shakespeare', '你看，我说过的。'); }, 5200);
     bark(BOSS_LINES.mercutioFall.who, BOSS_LINES.mercutioFall.text);
     setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.mercutioFall2.who, BOSS_LINES.mercutioFall2.text); }, 2600);
   }
@@ -879,11 +881,12 @@ function killEnemy(i) {
   if (t.boss) {   // Boss 被打动：散出一大圈萤火
     dogDown = true;
     for (let k = 0; k < 26 && O.n < MAX_O; k++) { const a = k / 26 * 6.28, d = 1 + Math.random() * 2, j = O.n++; O.x[j] = E.x[i] + Math.cos(a) * d; O.z[j] = E.z[i] + Math.sin(a) * d; O.v[j] = 1; O.t[j] = Math.random() * 6; }
-    if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : t.key === 'caliban' ? TP_BOSS.down : BOSS_LINES.dogDown; bark(L.who, L.text); }
+    if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : t.key === 'caliban' ? TP_BOSS.down : BOSS_LINES.dogDown; bark(L.who, L.text); setTimeout(() => { if (phase === 'fight' || phase === 'actEnd') bark('shakespeare', '这……这不是我写的！'); }, 2600); }
     ring(E.x[i], E.z[i], 6, 0.8);
   } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
   if (E.elite[i]) dropChest(E.x[i], E.z[i]);
+  else if (!t.boss && !t.model && Math.random() < 0.3) addFan(E.type[i]);
   for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind, E.elite, E.sk, E.st, E.state, E.ddx, E.ddz]) a[i] = a[j];
   sfxPop(t.boss);
   kills++; comboAdd();
@@ -1010,7 +1013,7 @@ function sfxPick() {   // 捡萤火：叮，连着捡音越来越高
   if (!gate('pick', 35)) return;
   tone(nt(12 + [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33][pickN]), { dur: 0.16, vol: 0.035, type: 'triangle' });
 }
-function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
+function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); loseFans(3); if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
 function sfxHit() { if (gate('hit', 60)) burst({ dur: 0.045, vol: 0.018, freq: 2400, q: 3 }); }
 function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { t0: k * 0.055, dur: 0.45, vol: 0.05, type: 'triangle' })); burst({ t0: 0.3, dur: 0.6, vol: 0.03, freq: 7000, type: 'highpass' }); }
 function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq: 900, q: 1.5 }); }
@@ -1026,7 +1029,7 @@ function bgmTick() {
   if (muted || document.hidden || actx.state !== 'running') { BGM.next = actx.currentTime + 0.1; return; }
   const spb = 60 / 92 / 2;
   while (BGM.next < actx.currentTime + 0.3) {
-    const st = BGM.step++, bar = Math.floor(st / 8) % 4, beat = st % 8, ch = (act === 4 ? PROG.night : PROG.day)[bar], t0 = Math.max(0, BGM.next - actx.currentTime);
+    const st = BGM.step++, bar = Math.floor(st / 8) % 4, beat = st % 8, ch = (act === 4 || (act === 3 && mercFell) ? PROG.night : PROG.day)[bar], t0 = Math.max(0, BGM.next - actx.currentTime);
     const fight = phase === 'fight' || phase === 'levelup', base = 196;
     if (beat === 0) for (const n of ch) tone(base * Math.pow(2, n / 12), { t0, dur: spb * 8, vol: 0.014, attack: 0.4 });
     if (beat === 0 || beat === 4 || (fight && beat === 6)) tone(base / 2 * Math.pow(2, ch[0] / 12), { t0, dur: spb * 2.5, vol: 0.055, type: 'triangle' });
@@ -1042,9 +1045,9 @@ const ui = document.createElement('div'); ui.id = 'ui'; stage.appendChild(ui);
 ui.innerHTML = `
 <div id="vignette"></div>
 <div id="bars" class="hide"><div class="hpbar"><i></i></div><div class="xpbar"><i></i></div><span class="lv">1 级</span></div>
-<div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span class="goal"></span><span class="tm"></span></div>
+<div id="actinfo" class="hide"><b>第一幕 · 舞会</b><span class="day"></span><span class="goal"></span><span class="tm"></span></div>
 <div id="boss" class="hide"><b>看门的三头犬</b><div class="bossbar"><i></i></div></div>
-<div id="acttitle" class="hide"><b></b><small></small></div>
+<div id="acttitle" class="hide"><i class="day"></i><b></b><small></small></div>
 <div id="calm" class="hide"><b>朱丽叶的安稳</b><div class="bossbar"><i></i></div></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
 <div id="dlg" class="hide" data-ui><div class="cg hide"><img alt=""></div><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
@@ -1215,13 +1218,14 @@ function paintingCard(act, opts) {
 // ---------- 流程 ----------
 let lineIdx = 0, saidLow = false, firstLevelSaid = false, saidCalmHalf = false, saidCalmLow = false;
 const ACTS = {
-  1: { name: '第一幕 · 舞会', lines: ACT1_LINES, goal: '打动闹事的客人，撑到舞会散场' },
-  2: { name: '第二幕 · 阳台', lines: ACT2_LINES, goal: '守在阳台下，打动冲来的三头犬' },
-  3: { name: '第三幕 · 决斗', lines: ACT3_LINES, goal: '用歌声打动提伯尔特，别让决斗见血' },
-  4: { name: '第四幕 · 墓室', lines: ACT4_LINES, goal: '守住沉睡的朱丽叶，别让亡魂靠近石台' },
-  5: { name: '第二部 · 漂岛', lines: TP_LINES, goal: '打动海里爬上来的怪，再打动卡利班' },
+  1: { name: '第一幕 · 舞会', lines: ACT1_LINES, goal: '打动闹事的客人，撑到舞会散场', day: '第一天 · 离悲剧还有 5 天' },
+  2: { name: '第二幕 · 阳台', lines: ACT2_LINES, goal: '守在阳台下，打动冲来的三头犬', day: '第一天夜里 · 离悲剧还有 5 天' },
+  3: { name: '第三幕 · 决斗', lines: ACT3_LINES, goal: '引提伯尔特撞柱子，趁他晕的时候打动他', day: '第二天 · 离悲剧还有 4 天' },
+  4: { name: '第四幕 · 墓室', lines: ACT4_LINES, goal: '守住沉睡的朱丽叶，别让亡魂靠近石台', day: '第五天 · 悲剧就在今晚' },
+  5: { name: '第二部 · 漂岛', lines: TP_LINES, goal: '打动海里爬上来的怪，再打动卡利班', day: '暴风雨之后' },
 };
 const storyOf = (n) => (n <= 4 ? 'rj' : 'tp');
+const at0 = () => $('#acttitle .day');
 const ACT_NO = ['', '第一', '第二', '第三', '第四'];
 // 开始一个故事。from = 从第几幕开始（继续存档时 > 1）；again = 倒下后从头再来，不再放开场对话
 async function startStory(story, from, again) {
@@ -1265,7 +1269,7 @@ function beginAct(n, retry) {
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.15);   // 每一幕开头只回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
-  clearChests(); eliteT = 0; casting = 0; player.conf = 0;
+  clearChests(); eliteT = 0; casting = 0; player.conf = 0; shakeIdx = 0; inkT = 0; trailReset();
   dogSpawned = dogDown = false; bossCharge = 0; calm = 100; saidCalmHalf = saidCalmLow = false; mercFell = false; EB.n = 0;
   if (juliet) { juliet.visible = false; layJuliet(false); }
   if (tybalt) tybalt.visible = false;
@@ -1276,7 +1280,7 @@ function beginAct(n, retry) {
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
   show($('#bars')); show($('#actinfo')); show($('#tools'));
-  $('#actinfo .goal').textContent = ACTS[n].goal;
+  $('#actinfo .goal').textContent = ACTS[n].goal; $('#actinfo .day').textContent = ACTS[n].day; at0().textContent = ACTS[n].day;
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; at.querySelector('small').textContent = ACTS[n].goal; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
   setTimeout(() => show(at, false), 3400);
   sfxAct();
@@ -1429,7 +1433,7 @@ function step(dt) {
   }
 
   director(dt);
-  if (fighting) { stepElites(dt); stepHazards(dt); if (phase !== 'fight') return; }
+  if (fighting) { stepElites(dt); stepShakespeare(dt); stepHazards(dt); stepFans(dt); if (phase !== 'fight') return; }
   stepChests();
 
   // 怪：朝主角走，互相推开，绕开障碍物
@@ -1603,6 +1607,12 @@ function shoot(ang) {
   B.dx[i] = Math.sin(ang) * sp; B.dz[i] = Math.cos(ang) * sp; B.life[i] = 1.05;
   B.dmg[i] = stats.dmgMul; B.pierce[i] = stats.pierce; B.bounce[i] = stats.bounce; B.size[i] = stats.size; B.last[i] = -1;
 }
+function shootFrom(x, z, ang, dmg) {
+  if (B.n >= MAX_B) return;
+  const i = B.n++, sp = 12;
+  B.x[i] = x; B.z[i] = z; B.dx[i] = Math.sin(ang) * sp; B.dz[i] = Math.cos(ang) * sp; B.life[i] = 0.9;
+  B.dmg[i] = dmg; B.pierce[i] = 0; B.bounce[i] = 0; B.size[i] = 0.7; B.last[i] = -1;
+}
 function shockwave(R, dmg) {
   ring(player.x, player.z, R);
   for (let i = E.n - 1; i >= 0; i--) {
@@ -1766,6 +1776,28 @@ async function openChest() {   // 宝箱：挑一首歌，直接升两级
   if (id && (levels[id] || 0) < byId[id].max) takeSkill(id);
   if (phase === 'levelup') phase = 'fight';
 }
+// 莎士比亚的鬼魂：打的时候时不时跳出来抗议，第二幕起往场上泼墨水（红圈，躲开）
+const SHAKES = {
+  1: [[5, '舞会就该安安静静地跳舞！谁让你唱歌的？'], [24, '不对不对，罗密欧这时候应该只顾着发呆！']],
+  2: [[4, '阳台这场戏我写得多美，你别乱改！'], [26, '三头犬？我的剧本里可没有三头犬……算了，咬他！']],
+  3: [[3, '这一幕我写得最好：两个人死在广场上。'], [30, '提伯尔特！撞他！']],
+  4: [[3, '毒药呢？罗密欧，你的毒药呢？！'], [25, '天快亮了……她就要醒了，你怎么还活着？']],
+  5: [[4, '这是我的另一部戏！你怎么跑进来了？'], [26, '卡利班，把他赶下海！']],
+};
+let shakeIdx = 0, inkT = 0, inkSaid = false;
+function stepShakespeare(dt) {
+  const L = SHAKES[act] || [];
+  if (shakeIdx < L.length && actTime >= L[shakeIdx][0]) bark('shakespeare', L[shakeIdx++][1]);
+  if (act >= 2) {
+    inkT += dt;
+    if (inkT > 15) {
+      inkT = 0;
+      for (let j = 0; j < 3; j++) { const a = Math.random() * Math.PI * 2, r = j === 0 ? 0 : 2.2 + Math.random() * 1.5; hazard(0, player.x + Math.sin(a) * r, player.z + Math.cos(a) * r, 1.7, 1.15, 9); }
+      floatText(player.x, player.z, '莎士比亚泼墨水！');
+      if (!inkSaid) { inkSaid = true; bark('shakespeare', '墨水！给我改回去！'); }
+    }
+  }
+}
 let eliteT = 0;
 function stepElites(dt) {   // 每 22 秒来一只精英怪（这一幕的普通怪，血多 6 倍、个头大、金色、头上有冠），打倒掉宝箱
   eliteT += dt;
@@ -1775,6 +1807,41 @@ function stepElites(dt) {   // 每 22 秒来一只精英怪（这一幕的普通
   spawnEnemy(ty); const i = E.n - 1; E.elite[i] = 1; E.hp[i] *= 6; E.speed[i] *= 0.8;
   bark('romeo', '金色的那个……打倒它有好东西！');
 }
+
+// ---------- 伴舞大游行：被歌声打动的怪，有三成会跟在奶娃后面排队跳舞，还会一起唱歌打怪；被打中跑掉几个 ----------
+const MAX_F = 40, TRAIL = 256;
+const F = { n: 0, type: new Uint8Array(MAX_F), x: new Float32Array(MAX_F), z: new Float32Array(MAX_F), cd: new Float32Array(MAX_F), ph: new Float32Array(MAX_F) };
+const trail = { x: new Float32Array(TRAIL), z: new Float32Array(TRAIL), k: 0, lx: 0, lz: 0 };
+function trailReset() { for (let i = 0; i < TRAIL; i++) { trail.x[i] = player.x; trail.z[i] = player.z + 0.01 * i; } trail.lx = player.x; trail.lz = player.z; for (let f = 0; f < F.n; f++) { F.x[f] = player.x; F.z[f] = player.z; } }
+function addFan(ty) {
+  if (F.n >= MAX_F || !monFrames[ty]) return;
+  const k = F.n++; F.type[k] = ty; F.x[k] = player.x; F.z[k] = player.z; F.cd[k] = 1 + Math.random(); F.ph[k] = Math.random() * 6;
+  if (F.n === 1) bark('romeo', '它……跟着我跳起舞来了？');
+  if (F.n === 10) bark('shakespeare', '我的反派怎么都成了伴舞？！');
+  if (F.n === 25) cheer(999);
+}
+function loseFans(n) {
+  if (!F.n) return;
+  const m = Math.min(n, F.n); F.n -= m;
+  floatText(player.x, player.z, `伴舞吓跑了 ${m} 个`);
+}
+function stepFans(dt) {
+  // 记下奶娃走过的路（每 0.35 米一个点），伴舞一个接一个踩着走
+  if (Math.hypot(player.x - trail.lx, player.z - trail.lz) > 0.35) { trail.k = (trail.k + 1) % TRAIL; trail.x[trail.k] = trail.lx = player.x; trail.z[trail.k] = trail.lz = player.z; }
+  for (let f = 0; f < F.n; f++) {
+    const idx = (trail.k - (f + 1) * 3 + TRAIL * 4) % TRAIL, tx = trail.x[idx], tz = trail.z[idx];
+    F.x[f] += (tx - F.x[f]) * Math.min(1, dt * 8); F.z[f] += (tz - F.z[f]) * Math.min(1, dt * 8);
+    F.ph[f] += dt * 7;
+    F.cd[f] -= dt;
+    if (F.cd[f] <= 0) {   // 一起唱：朝最近的怪射一个小音符
+      F.cd[f] = 1.6 + Math.random() * 0.6;
+      const j = nearestEnemy(F.x[f], F.z[f], 9);
+      if (j >= 0) shootFrom(F.x[f], F.z[f], Math.atan2(E.x[j] - F.x[f], E.z[j] - F.z[f]), stats.dmgMul * 0.6);
+    }
+  }
+}
+const heartTex = canvasTex(64, (g, s) => { g.font = `${s * 0.8}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowColor = '#ff5a8a'; g.shadowBlur = 10; g.fillStyle = '#ff8ab0'; g.fillText('♥', s / 2, s / 2 + 2); });
+const heartMesh = flatInst(billboardGeo(1, 1, true), additive(heartTex), MAX_F);
 
 // ---------- 手感：震屏、顿帧、伤害数字、连击、脚下的小烟 ----------
 let shake = 0, hitStop = 0, combo = 0, comboT = 0, comboBest = 0;
@@ -1878,6 +1945,19 @@ function draw(dt) {
   if (tybalt && tybalt.visible) tybalt.userData.mixer.update(dt);
   if (caliban) { if (act !== 5 || !(dogSpawned && !dogDown)) caliban.visible = false; else if (caliban.userData.mixer) caliban.userData.mixer.update(dt); }
   if (ariel.visible) { const a = time * 1.6; ariel.position.set(player.x + Math.cos(a) * 1.6, 1.9 + Math.sin(time * 3) * 0.25, player.z + Math.sin(a) * 1.0); }
+  {   // 伴舞：用怪的模型画，小一号、粉一点，一蹦一跳左右扭，头上有颗心
+    const hm = heartMesh.instanceMatrix.array; let nh = 0;
+    for (let f = 0; f < F.n; f++) {
+      const ty = F.type[f], mf = monFrames[ty]; if (!mf) continue;
+      const fr = mf.n > 1 ? Math.floor(F.ph[f] / 7 / mf.dur * 1.3 * mf.n) % mf.n : 0, key = ty * 8 + fr, k2 = fcounts[key]++, fm = mf.meshes[fr];
+      const nx = f === 0 ? player.x : F.x[f - 1], nz = f === 0 ? player.z : F.z[f - 1];
+      const yaw = Math.atan2(nx - F.x[f], nz - F.z[f]) + Math.sin(F.ph[f]) * 0.5;
+      writeMatrixY(fm.instanceMatrix.array, k2, F.x[f], Math.abs(Math.sin(F.ph[f])) * 0.25, F.z[f], 0.72, yaw);
+      const col = fm.instanceColor.array; col[k2 * 3] = 1.35; col[k2 * 3 + 1] = 0.95; col[k2 * 3 + 2] = 1.15;
+      writeMatrix(hm, nh++, F.x[f], TYPES[ty].h * 0.72 + 0.35 + Math.sin(F.ph[f] * 0.7) * 0.08, F.z[f], 0.45, 0.45, 0.45);
+    }
+    heartMesh.count = nh; heartMesh.instanceMatrix.needsUpdate = true;
+  }
   monFrames.forEach((mf, ty) => { if (!mf) return; mf.meshes.forEach((m, f) => { const c = fcounts[ty * 8 + f]; m.count = c; m.visible = c > 0; if (c) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }); });
   enemyMeshes.forEach((m, ty) => { if (!m) return; m.count = counts[ty]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
   shadowMesh.count = E.n; shadowMesh.instanceMatrix.needsUpdate = true;
