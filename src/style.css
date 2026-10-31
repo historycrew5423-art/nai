@@ -422,3 +422,4 @@ body.portrait #rotate { display: none; }   /* 10-31 第 57 轮：竖屏也能玩
 #stage.portrait #modes .row { flex-direction: column; gap: calc(var(--u) * 3); }
 #stage.portrait #modes button { width: calc(var(--u) * 84); }
 #stage.portrait #modes button img { height: calc(var(--u) * 34); }
+#modes .note a { color: #ffd98a; pointer-events: auto; }

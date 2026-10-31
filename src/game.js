@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031q';
-import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031q';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031q';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031q';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031q';
+import { Input } from './input.js?v=20261031r';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031r';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031r';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031r';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031r';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -1130,8 +1130,9 @@ function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq:
 // 每种第一次一定响；之后最冷时 7 秒一声、越打越热闹（最热时 3 秒一声）；大笑和肥嘟嘟之后安静 2.5 秒；主角的口头禅隔 10 秒以上
 const MEME = { lute: ['daodun'], drum: ['banana-cry-1'], birdhead: ['gugugaga-1', 'gugugaga-2'], horn: ['oiia-1'], shade: ['oiia-2'], dodge: ['shanshenbu'], feidudu: ['feidudu'], lines: ['nl-hola-gabadie', 'nl-gajiaosai', 'nl-gagadilashui', 'nl-dupu'], laugh: ['naiwa-baoxiao'] };
 const memeBuf = {}; let memeLoading = false, memeQuiet = 0, lineNext = 0;
+let ABSTRACT = Q.has('meme');   // 抽象版：同样的两张地图（维罗纳 + 海岛），加上队友版的梗音效（小怪叫声、闪身步、奶龙口头禅、肥嘟嘟、爆笑）
 function loadMemes() {
-  if (memeLoading || !actx || !Q.has('meme')) return; memeLoading = true;   // 经典版不放队友的梗音效（在抽象版里），网址加 ?meme=1 才放
+  if (memeLoading || !actx || !ABSTRACT) return; memeLoading = true;
   for (const n of new Set(Object.values(MEME).flat())) fetch(`assets/audio/meme/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => new Promise((ok, no) => actx.decodeAudioData(b, ok, no))).then((buf) => { memeBuf[n] = buf; }).catch(() => {});
 }
 function meme(kind, vol = 0.8, force = false, maxDur = 0) {
@@ -1221,8 +1222,8 @@ ui.innerHTML = `
 <div id="viewer" class="hide" data-ui><img alt=""></div>
 <div id="modes" class="hide" data-ui><h2>选一个版本来玩</h2><div class="row">
  <button class="m-classic"><img alt="" src="assets/cg/key-rj.jpg"><b>经典版</b><small>莎士比亚的两场戏：剧情、名画、精致的 3D 场景，罗密欧与朱丽叶 + 暴风雨</small></button>
- <button class="m-abstract"><img alt="" src="assets/img/naiwa-belly-laugh.gif"><b>抽象版</b><small>奶蛙缝合版：梗小怪、魔性音效、捧腹大笑和肥嘟嘟大招，越玩越上头</small></button>
-</div><p class="note">两个版本的地图和玩法不一样，随时能回来换</p></div>
+ <button class="m-abstract"><img alt="" src="assets/img/naiwa-belly-laugh.gif"><b>抽象版</b><small>同样两张地图（维罗纳 + 海岛），加上队友版的魔性音效：小怪的梗叫声、闪身步、奶龙口头禅、捧腹大笑和肥嘟嘟</small></button>
+</div><p class="note">想玩队友的原版（梗小怪、喷字、第一人称）：<a class="m-naiwa" href="naiwa/">奶蛙缝合版 ›</a></p></div>
 <div id="shop" class="hide" data-ui><div class="inner"><h2>后台</h2><p class="have"></p><div class="items"></div><p class="note">每次演出（就算倒下了）观众都会扔玫瑰。莎士比亚把剧本翻回第一天，可你买到的本事会一直留着。</p><div class="btns"><button class="b-back">回到前台</button></div></div></div>
 <div id="poster" class="hide" data-ui><img alt=""><p>长按图片保存，发给朋友看看你的版本</p><div class="btns"><button class="b-back">好</button></div></div>
 <div id="wxguide" class="hide" data-ui><div class="arrow">↗</div><h2>想全屏玩？</h2><p>点右上角 <b>···</b> → 选 <b>在浏览器打开</b><br>在 Safari 里点 <b>分享 → 添加到主屏幕</b>，从桌面图标进就是全屏</p><div class="btns"><button class="b-ok">先在微信里玩</button></div></div>
@@ -2725,11 +2726,14 @@ $('#cover').onclick = () => {
   const c = $('#cover'); c.classList.add('leave'); setTimeout(() => { show(c, false); c.classList.remove('leave'); }, 450);
   show($('#modes'));   // 10-31 第 59 轮：先选版本：经典版（这个游戏）或抽象版（队友的奶蛙缝合版，naiwa/）
 };
-$('#modes .m-classic').onclick = () => {
+const pickMode = (abs) => {
+  ABSTRACT = abs; document.body.classList.toggle('abstract', abs); if (abs) loadMemes();
+  $('#title .sub').textContent = abs ? '抽象版 · 两张地图 + 魔性音效' : '用一首情歌，改写莎士比亚的结局';
   show($('#modes'), false); refreshTitle(); show($('#title'));
   if (IN_WX && !STANDALONE && !sessionStorage.getItem('wxg')) { sessionStorage.setItem('wxg', '1'); show($('#wxguide')); }
 };
-$('#modes .m-abstract').onclick = () => { location.href = 'naiwa/'; };
+$('#modes .m-classic').onclick = () => pickMode(false);
+$('#modes .m-abstract').onclick = () => pickMode(true);
 { const h = $('#title .fshint'); if (h && h.innerHTML) $('#cover .fshint2').innerHTML = h.innerHTML; }
 function showTitle() {
   phase = 'title'; resetRun(); setAct(1); crowd.classList.add('hide'); ultEl.classList.add('hide'); fduEl.classList.add('hide'); ultCharge = 0;
