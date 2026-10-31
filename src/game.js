@@ -31,16 +31,22 @@ scene.fog = new THREE.Fog(0x14121c, 17, 33);
 const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 80);
 
 let pixelCap = 1.75;   // 清晰度上限；帧数低时自动往下调（见主循环）
+// 画面铺满整个浏览器窗口（10-31 用户说手机上不是全屏：原来固定 16:9，两边留黑边）。
+// 微信里横屏，上下有两条栏，剩下的地方大约 3:1，也要铺满；比 3.3:1 还宽才在两边留边。镜头的竖直视角不变，屏幕越宽，左右看得越远。
 function layout() {
-  const portrait = innerHeight > innerWidth;
+  const W = innerWidth, H = innerHeight;
+  const portrait = H > W;
   document.body.classList.toggle('portrait', portrait);
-  const w = Math.min(innerWidth, innerHeight * 16 / 9), h = w * 9 / 16;
+  const h = H, w = Math.min(W, H * 3.3);
   stage.style.width = w + 'px'; stage.style.height = h + 'px';
-  stage.style.setProperty('--u', (h / 100) + 'px');
+  stage.style.setProperty('--u', (Math.min(h, w * 9 / 16) / 100) + 'px');
+  camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(devicePixelRatio, pixelCap));
   renderer.setSize(w, h, false);
 }
 addEventListener('resize', layout);
+addEventListener('orientationchange', () => setTimeout(layout, 350));   // iOS 转屏后过一会儿才报新的大小
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
 layout();
 
 // ---------- 灯：冷蓝的月光和环境光，主角身上一盏暖光 ----------
@@ -500,8 +506,9 @@ function act1Target(t) { return t < 20 ? Math.round(2 + t * 0.4) : Math.round(10
 let spawnAcc = 0, birdWaves = 0;
 function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   if (E.n >= MAX_E) return;
+  const wide = Math.max(1, camera.aspect / (16 / 9));   // 屏幕更宽时，左右两边生成得更远，保证在画面外
   const a = ang ?? Math.random() * Math.PI * 2, d = dist ?? (actTime < 10 ? 15 : 17) + Math.random() * 3;
-  const ca = Math.cos(a), p = { x: cx + Math.sin(a) * d, z: cz + ca * d * (ca < 0 ? 1.1 : 0.75) };   // 生成在屏幕外
+  const ca = Math.cos(a), p = { x: cx + Math.sin(a) * d * wide, z: cz + ca * d * (ca < 0 ? 1.1 : 0.75) };   // 生成在屏幕外
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
   E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
@@ -677,7 +684,7 @@ ui.innerHTML = `
 <div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：四幕都能玩了</p></div>
+<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：四幕都能玩了</p><p class="fshint hide"></p></div>
 <div id="tools" class="hide"><button class="b-pause">暂停</button><button class="b-mute">声音 开</button></div>
 <div id="pause" class="hide" data-ui><h2>暂停</h2><button class="b-resume">继续</button><button class="b-restart">从头开始</button></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
@@ -1251,9 +1258,31 @@ $('#pause .b-resume').onclick = () => { show($('#pause'), false); phase = paused
 $('#pause .b-restart').onclick = () => { show($('#pause'), false); pausedFrom = null; show($('#boss'), false); show($('#calm'), false); startRun(true); };
 $('#tools .b-mute').onclick = (e) => { muted = !muted; e.target.textContent = muted ? '声音 关' : '声音 开'; };
 
+// ---------- 全屏 ----------
+// iPhone 的网页没法自己全屏，也没法锁横屏：在微信、抖音这类应用里打开时，提示用户换到浏览器；
+// 在 Safari 里提示"添加到主屏幕"（manifest.webmanifest 设成全屏）。安卓和 iPad 点开始时直接请求全屏。
+const UA = navigator.userAgent;
+const IN_APP = /MicroMessenger|aweme|BytedanceWebview|NewsArticle|Weibo|xhsdiscover|DingTalk|AlipayClient|Lark| QQ\//i.test(UA);
+const IOS = /iPhone|iPod/.test(UA);
+const STANDALONE = navigator.standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+{
+  const h = $('#title .fshint');
+  if (IN_APP) h.innerHTML = '想全屏玩：点右上角 <b>···</b> →「<b>在浏览器打开</b>」，再「添加到主屏幕」';
+  else if (IOS && !STANDALONE) h.innerHTML = '想全屏玩：点 Safari 的 <b>分享</b> 按钮 →「<b>添加到主屏幕</b>」，再从主屏幕打开';
+  show(h, !!h.innerHTML && !AUTO);
+}
+function goFullscreen() {
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req || document.fullscreenElement || STANDALONE) return;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.then) p.then(() => { screen.orientation?.lock?.('landscape').catch(() => {}); setTimeout(layout, 300); }).catch(() => {});
+  } catch {}
+}
+
 // ---------- 开始画面 ----------
 let titleReady = false;
-$('#title').onclick = () => { if (!titleReady) return; titleReady = false; initAudio(); startRun(); };
+$('#title').onclick = () => { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); startRun(); };
 
 Promise.all([loadModel('fantasy', 1.9), loadModel('wedding-dress', 1.95), loadModel('minotaur', 2.3), loadModel('rabbit', 1.85)]).then(([h, j, t, m]) => {
   hero = h; juliet = j; tybalt = t; mercutio = m;
