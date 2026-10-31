@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031e';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031e';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031e';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031e';
-import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031e';
+import { Input } from './input.js?v=20261031f';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031f';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031f';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031f';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031f';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -883,7 +883,8 @@ function killEnemy(i) {
   const j = --E.n;
   for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk, E.wind]) a[i] = a[j];
   sfxPop(t.boss);
-  kills++;
+  kills++; comboAdd();
+  if (t.boss) { shake = Math.max(shake, 1.1); hitStop = 0.25; } else if (t.hp >= 9) { shake = Math.max(shake, 0.35); hitStop = Math.max(hitStop, 0.05); }
 }
 function removeBullet(i) {
   const j = --B.n;
@@ -891,6 +892,7 @@ function removeBullet(i) {
 }
 function hurtEnemy(i, dmg, kx = 0, kz = 0) {
   E.hp[i] -= dmg; E.flash[i] = 0.09;
+  popNumber(E.x[i], E.z[i], dmg, TYPES[E.type[i]].boss);
   if (TYPES[E.type[i]].boss) { kx *= 0.08; kz *= 0.08; }   // 三头犬推不太动
   if (kx || kz) { E.x[i] += kx; E.z[i] += kz; }
   if (E.hp[i] <= 0) { killEnemy(i); return true; }
@@ -944,7 +946,24 @@ function mouseAim() {
 // ---------- 声音：每发一个音符弹一声，连起来是一段旋律 ----------
 let actx = null;
 const MELODY = [0, 4, 7, 9, 7, 4, 2, 4, 0, 4, 7, 12, 9, 7, 4, 2];
-function initAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); bgmStart(); } catch { actx = null; } }
+// iPhone 侧面静音键开着时，网页的 Web Audio 没声音：把声音类型设成"播放"，再放一段无声的 <audio>，就不受静音键影响（10-31 用户说手机里没声音）
+let unlocked = false;
+function unlockAudio() {
+  if (unlocked) return; unlocked = true;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  try {
+    const n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf), w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    const a = document.createElement('audio'); a.setAttribute('playsinline', ''); a.loop = true; a.src = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+    a.play().catch(() => {});
+  } catch {}
+}
+function initAudio() { unlockAudio(); try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); bgmStart(); } catch { actx = null; } }
+// 第一次碰屏幕就打开声音（微信里也要在手指点下去的那一刻）
+for (const ev of ['touchend', 'click']) document.addEventListener(ev, () => initAudio(), { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && actx) actx.resume(); });
 let muted = false;
 function pluck(semi, vol = 0.05, dur = 0.35, type = 'triangle') {
   if (!actx || muted) return;
@@ -987,16 +1006,17 @@ function sfxPick() {   // 捡萤火：叮，连着捡音越来越高
   if (!gate('pick', 35)) return;
   tone(nt(12 + [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33][pickN]), { dur: 0.16, vol: 0.035, type: 'triangle' });
 }
-function sfxHurt() { if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
+function sfxHurt() { shake = Math.max(shake, 0.75); flashHurt(); comboBreak(); if (!gate('hurt', 120)) return; tone(190, { dur: 0.28, vol: 0.13, to: 55 }); burst({ dur: 0.16, vol: 0.08, freq: 500, type: 'lowpass' }); }
 function sfxHit() { if (gate('hit', 60)) burst({ dur: 0.045, vol: 0.018, freq: 2400, q: 3 }); }
 function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { t0: k * 0.055, dur: 0.45, vol: 0.05, type: 'triangle' })); burst({ t0: 0.3, dur: 0.6, vol: 0.03, freq: 7000, type: 'highpass' }); }
+function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq: 900, q: 1.5 }); }
 function sfxClick() { if (gate('click', 60)) tone(1250, { dur: 0.05, vol: 0.03, type: 'triangle' }); }
 function sfxBoss() { tone(98, { dur: 1.4, vol: 0.07, type: 'sawtooth', to: 82 }); tone(146.8, { dur: 1.4, vol: 0.04, type: 'sawtooth', to: 123 }); burst({ dur: 0.9, vol: 0.06, freq: 260, type: 'lowpass' }); }
 function sfxAct() { [[0, 4, 7], [5, 9, 12], [7, 11, 14], [12, 16, 19]].forEach((ch, k) => ch.forEach((n) => tone(nt(n), { t0: k * 0.16, dur: k === 3 ? 0.9 : 0.25, vol: 0.035, type: 'triangle' }))); }
 // 背景音乐：G 大调 I–vi–IV–V（墓室那一幕换成小调的顺序），垫底的和弦 + 低音 + 分解和弦，打起来加一点镲。92 拍每分钟
 const PROG = { day: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], night: [[-3, 0, 4], [-7, -3, 0], [0, 4, 7], [-5, -1, 2]] };
 const BGM = { next: 0, step: 0, timer: 0 };
-function bgmStart() { if (!actx || BGM.timer) return; BGM.next = actx.currentTime + 0.1; BGM.timer = setInterval(bgmTick, 120); }
+function bgmStart() { if (!actx || BGM.timer) return; BGM.next = actx.currentTime + 0.1; BGM.t0 = BGM.next; BGM.timer = setInterval(bgmTick, 120); }
 function bgmTick() {
   if (!actx) return;
   if (muted || document.hidden || actx.state !== 'running') { BGM.next = actx.currentTime + 0.1; return; }
@@ -1607,6 +1627,46 @@ async function openLevelUp() {
   if (phase === 'levelup') phase = 'fight';
 }
 
+// ---------- 手感：震屏、顿帧、伤害数字、连击、脚下的小烟 ----------
+let shake = 0, hitStop = 0, combo = 0, comboT = 0, comboBest = 0;
+const fxLayer = document.createElement('div'); fxLayer.id = 'fx'; stage.appendChild(fxLayer);
+const numPool = Array.from({ length: 28 }, () => { const b = document.createElement('b'); b.className = 'num'; fxLayer.appendChild(b); return b; });
+let numK = 0, numGate = 0;
+const projV = new THREE.Vector3();
+function toScreen(x, y, z) { projV.set(x, y, z).project(camera); return [(projV.x + 1) / 2 * 100, (1 - projV.y) / 2 * 100]; }
+function popNumber(x, z, dmg, big) {
+  const t = performance.now(); if (!big && t - numGate < 70) return; numGate = t;
+  const el = numPool[numK++ % numPool.length], [sx, sy] = toScreen(x, 1.8, z);
+  el.textContent = Math.max(1, Math.round(dmg * 10)); el.className = 'num' + (big ? ' big' : dmg >= 2 ? ' crit' : '');
+  el.style.left = (sx + (Math.random() - 0.5) * 3) + '%'; el.style.top = sy + '%';
+  void el.offsetWidth; el.classList.add('go');
+}
+const comboEl = document.createElement('div'); comboEl.id = 'combo'; comboEl.className = 'hide'; comboEl.innerHTML = '<b></b><small>连击</small>'; fxLayer.appendChild(comboEl);
+function comboAdd() {
+  combo++; comboT = 2.6; comboBest = Math.max(comboBest, combo);
+  if (combo >= 5) { comboEl.classList.remove('hide'); comboEl.querySelector('b').textContent = '×' + combo; comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop'); }
+  if (combo === 25 || combo === 60 || combo === 120 || combo % 200 === 0) cheer(combo);
+}
+function comboBreak() { combo = 0; comboT = 0; comboEl.classList.add('hide'); }
+function stepCombo(dt) { if (comboT > 0) { comboT -= dt; if (comboT <= 0) comboBreak(); } }
+// 连击到一定数量：屏幕中间跳一句夸奖
+function cheer(n) {
+  const words = ['太动人了！', '全场起立！', '安可！安可！', '莎士比亚都哭了'];
+  const el = document.createElement('div'); el.className = 'cheer'; el.textContent = words[Math.min(words.length - 1, [25, 60, 120].indexOf(n) < 0 ? 3 : [25, 60, 120].indexOf(n))];
+  fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600);
+  [0, 4, 7, 12].forEach((k, j) => tone(nt(k + 12), { t0: j * 0.06, dur: 0.3, vol: 0.04, type: 'triangle' }));
+}
+// 受伤：屏幕边缘红一下
+function flashHurt() { const v = document.getElementById('vignette'); if (!v) return; v.classList.remove('hurt'); void v.offsetWidth; v.classList.add('hurt'); }
+// 脚下的小烟：几片淡淡的圆，轮流用
+const dustMat = new THREE.MeshBasicMaterial({ map: glowTex('235,225,210'), transparent: true, opacity: 0.5, depthWrite: false });
+const dusts = Array.from({ length: 10 }, () => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7).rotateX(-Math.PI / 2), dustMat.clone()); m.visible = false; m.userData.t = 9; scene.add(m); return m; });
+let dustK = 0;
+function dust(x, z) { const m = dusts[dustK++ % dusts.length]; m.position.set(x + (Math.random() - 0.5) * 0.3, 0.05, z + (Math.random() - 0.5) * 0.3); m.userData.t = 0; m.visible = true; }
+function stepDust(dt) { for (const m of dusts) { if (m.userData.t > 0.5) { m.visible = false; continue; } m.userData.t += dt; const f = m.userData.t / 0.5; m.scale.setScalar(0.6 + f * 1.4); m.material.opacity = 0.45 * (1 - f); } }
+// 节拍：0 到 1，背景音乐每一拍转一圈（没声音时按 92 拍每分钟算）
+function beatPhase() { const t = actx && BGM.timer ? actx.currentTime - BGM.t0 : time; return (t * 92 / 60) % 1; }
+
 // ---------- 画 ----------
 function writeMatrix(arr, i, x, y, z, sx, sy, sz) {
   const o = i * 16;
@@ -1616,9 +1676,10 @@ function writeMatrix(arr, i, x, y, z, sx, sy, sz) {
   arr[o + 12] = x; arr[o + 13] = y; arr[o + 14] = z; arr[o + 15] = 1;
 }
 const counts = new Int32Array(TYPES.length), fcounts = new Int32Array(TYPES.length * 8);
-const camTarget = new THREE.Vector3();
+const camTarget = new THREE.Vector3(), shakeV = new THREE.Vector3();
 let camDist = 1;
 function draw(dt) {
+  stepDust(dt); if (phase === 'fight') stepCombo(dt);
   counts.fill(0); fcounts.fill(0);
   const sm = shadowMesh.instanceMatrix.array;
   for (let i = 0; i < E.n; i++) {
@@ -1686,16 +1747,35 @@ function draw(dt) {
 
   // 主角：用代码做的动作。走路一蹦一蹦、左右摇，站着时轻轻呼吸
   if (hero) {   // 罗密欧：跑的时候播跑步、面朝跑的方向；站着时播站立、面朝唱歌的方向
-    const mv = player.moving > 0.1;
+    // 10-31 用户说奶娃"经常立正、走路不放松"：手指短暂松开（0.2 秒内）还算在跑；站着时慢慢转身，跟着节拍摇摆点头；
+    // 跑的时候身体前倾、一颠一颠、落地压扁一点，转弯往里歪
+    const u = hero.userData;
+    if (player.moving > 0.1) u.grace = 0.2; else if (u.grace > 0) u.grace -= dt;
+    const mv = player.moving > 0.1 || u.grace > 0;
     hero.position.set(player.x, 0, player.z);
-    const want = mv ? Math.atan2(player.mvx, player.mvz) : Math.atan2(player.aimX, player.aimZ);
+    const want = player.moving > 0.1 || u.grace > 0 ? Math.atan2(player.mvx, player.mvz) : Math.atan2(player.aimX, player.aimZ);
     let dr = want - hero.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-    hero.rotation.y += dr * Math.min(1, dt * 12);
+    const turn = dr * Math.min(1, dt * (mv ? 10 : 4.5));
+    hero.rotation.y += turn;
+    const inner = u.inner, sp = mv ? Math.max(0.4, player.moving) : 0;
+    u.lean = (u.lean || 0) + ((mv ? 0.16 * sp : 0) - (u.lean || 0)) * Math.min(1, dt * 8);
+    u.bank = (u.bank || 0) + (Math.max(-0.22, Math.min(0.22, -turn / Math.max(dt, 1e-3) * 0.05)) - (u.bank || 0)) * Math.min(1, dt * 6);
+    u.ph = (u.ph || 0) + dt * (mv ? 9.5 * stats.speedMul * (0.7 + sp * 0.5) : 0);
+    const beat = beatPhase(), hop = Math.abs(Math.sin(u.ph));
+    if (mv) {
+      inner.position.y = hop * 0.09; inner.rotation.set(u.lean, 0, u.bank + Math.sin(u.ph) * 0.05);
+      const sq = 1 - (1 - hop) * 0.07; inner.scale.set(1 + (1 - sq) * 0.6, sq, 1 + (1 - sq) * 0.6);
+      if (Math.floor(u.ph / Math.PI) !== u.step) { u.step = Math.floor(u.ph / Math.PI); sfxStep(); dust(player.x, player.z); }
+    } else {   // 站着唱歌：跟着拍子左右摇、点一点头，呼吸
+      const sw = Math.sin(beat * Math.PI * 2);
+      inner.position.y = Math.abs(Math.sin(beat * Math.PI * 2)) * 0.035; inner.rotation.set(u.lean + 0.04 * Math.abs(sw), 0, sw * 0.07);
+      const br = 1 + Math.sin(time * 2.4) * 0.012; inner.scale.set(1 / Math.sqrt(br), br, 1 / Math.sqrt(br));
+    }
     if (hero.userData.jumpT > 0) hero.userData.jumpT -= dt;
     if (hero.userData.jumpT <= 0 || mv) {   // 跳的时候一动就接着跑（原来跳完会定住，人在挪却不迈腿）
       hero.userData.jumpT = 0;
       const fast = player.moving > 0.62, k = stats.speedMul;
-      playAnim(hero, !mv ? 'idle' : fast || !hero.userData.actions.walk ? 'run' : 'walk', { speed: !mv ? 1 : fast ? 0.85 * k + 0.25 * player.moving : (0.9 + player.moving * 0.8) * k });
+      playAnim(hero, !mv ? 'idle' : fast || !hero.userData.actions.walk ? 'run' : 'walk', { speed: !mv ? 1.4 : fast ? 0.85 * k + 0.25 * player.moving : (0.9 + player.moving * 0.8) * k, fade: 0.32 });
     }
     hero.userData.mixer.update(dt);
     hero.visible = !(player.hurtCd > 0.25 && Math.floor(time * 20) % 2);
@@ -1727,7 +1807,13 @@ function draw(dt) {
   camTarget.set(player.x + panX + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
   camera.position.lerp(camTarget, Math.min(1, dt * 7));
   camera.lookAt(camera.position.x - CAM.x * camDist, phase === 'actEnd' ? 0.9 : 0, camera.position.z - CAM.z * camDist);
+  shakeV.copy(camera.position);
+  if (shake > 0) {   // 震屏：被打、打死大怪、Boss 砸地（只在画这一帧时挪一下镜头，画完放回去）
+    shake = Math.max(0, shake - dt * 2.2);
+    const a = shake * shake * 0.5; camera.position.x += (Math.random() - 0.5) * a; camera.position.y += (Math.random() - 0.5) * a; camera.position.z += (Math.random() - 0.5) * a;
+  }
   renderer.render(scene, camera);
+  camera.position.copy(shakeV);
 
   // 界面数字
   if (phase === 'fight' || phase === 'levelup') {
@@ -1903,6 +1989,7 @@ let last = performance.now(), frames = 0, fpsT = last, slowSecs = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(1 / 30, (now - last) / 1000); last = now;
+  if (hitStop > 0) { hitStop -= dt; dt *= 0.05; }   // 打死大怪时画面顿一下
   if (document.body.classList.contains('portrait')) return;
   if (slowmo > 0) { if (phase !== 'levelup') slowmo -= dt; dt *= 0.25; }   // 慢动作（升级前、茂丘西奥倒下时）按真实时间倒数
   if (phase !== 'levelup' && phase !== 'story' && phase !== 'card' && phase !== 'dead' && phase !== 'paused') step(dt);
