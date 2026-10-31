@@ -6,10 +6,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Input } from './input.js?v=20261031c';
-import { byId, drawCards, baseStats } from './skills.js?v=20261031c';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031c';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031c';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { Input } from './input.js?v=20261031d';
+import { byId, drawCards, baseStats } from './skills.js?v=20261031d';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031d';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031d';
+import { makeIsland, coastR, START as ISLE_START } from './island.js?v=20261031d';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -26,6 +28,7 @@ const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;   // 只有海岛那一幕的太阳投影子（见 setAct），别的幕不画影子，不费电
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14121c);
 scene.fog = new THREE.Fog(0x14121c, 17, 33);
@@ -53,7 +56,9 @@ layout();
 
 // ---------- 灯：冷蓝的月光和环境光，主角身上一盏暖光 ----------
 const hemi = new THREE.HemisphereLight(0x8a90c8, 0x2a1e2a, 1.25); scene.add(hemi);
-const moon = new THREE.DirectionalLight(0x9fb4ff, 0.9); moon.position.set(-6, 12, -4); scene.add(moon);
+const moon = new THREE.DirectionalLight(0x9fb4ff, 0.9); moon.position.set(-6, 12, -4); scene.add(moon, moon.target);
+moon.shadow.mapSize.set(2048, 2048); moon.shadow.bias = -0.0004; moon.shadow.normalBias = 0.03;
+Object.assign(moon.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 80 }); moon.shadow.camera.updateProjectionMatrix();
 const heroLight = new THREE.PointLight(0xffb85c, 18, 9, 1.4); scene.add(heroLight);
 
 // ---------- 贴图工具 ----------
@@ -216,11 +221,11 @@ const ACT4_OBS = [
   { kind: 'coffin', x: -11, z: -11, r: 1.5 }, { kind: 'coffin', x: 11, z: 11, r: 1.5 },
   { kind: 'pillar', x: 11, z: -11, r: 0.8 }, { kind: 'pillar', x: -11, z: 11, r: 0.8 }, { kind: 'pillar', x: -15, z: 0, r: 0.8 }, { kind: 'pillar', x: 15, z: 0, r: 0.8 },
 ];
-const ACT5_OBS = [
+const ACT5_OBS_OLD = [
   { kind: 'hill', x: -11, z: -11, r: 3.0 }, { kind: 'palm', x: 11, z: -11, r: 0.6 }, { kind: 'rock', x: 11, z: 11, r: 1.3 },
   { kind: 'palm', x: -11, z: 11, r: 0.6 }, { kind: 'chest', x: -15, z: 0, r: 0.8 }, { kind: 'palm', x: 15, z: 0, r: 0.6 },
 ];
-const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS, 5: ACT5_OBS };
+const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS, 5: [] };   // 第五幕的障碍物在 island.js 里（不重复，按世界坐标）
 const MAT = {
   hedge: new THREE.MeshLambertMaterial({ color: 0x2b5236 }),
   leaf: new THREE.MeshLambertMaterial({ color: 0x2f5c34 }),
@@ -426,25 +431,36 @@ let tiles = [], curObs = ACT1_OBS, tileAct = 0;
 let tileIX = 1e9, tileIZ = 1e9;
 // 换一幕：换地面、地块、灯光
 const LOOKS = {
-  1: { bg: 0x14121c, hemi: [0x8a90c8, 0x2a1e2a, 1.25], moon: [0x9fb4ff, 0.9] },
-  2: { bg: 0x0e1420, hemi: [0x7a92c8, 0x16241f, 1.15], moon: [0xa8c0ff, 1.5] },
-  3: { bg: 0x2a1c26, hemi: [0xffc890, 0x3a2a40, 1.05], moon: [0xffa860, 1.9], sun: [-14, 7, 2] },
-  4: { bg: 0x09090f, hemi: [0x5a6aa0, 0x10101a, 0.8], moon: [0x7fa0ff, 0.5] },
-  5: { bg: 0x9ad8f2, hemi: [0xe4f6ff, 0x7aa35a, 2.0], moon: [0xfff0d0, 2.4], sun: [-8, 14, 7], day: true },
+  // 10-31 用户在手机上看"黑屏的很多"：维罗纳四幕原来太暗，整体调亮
+  1: { bg: 0x1c1826, hemi: [0x9aa0d8, 0x3a2a3a, 2.2], moon: [0xb0c0ff, 1.4] },
+  2: { bg: 0x142030, hemi: [0x8aa6d8, 0x24382f, 2.0], moon: [0xb8ccff, 2.0] },
+  3: { bg: 0x2e1f2a, hemi: [0xffd0a0, 0x4a3a50, 1.6], moon: [0xffb070, 2.3], sun: [-14, 7, 2] },
+  4: { bg: 0x101018, hemi: [0x7080b8, 0x1c1c2a, 1.6], moon: [0x90b0ff, 1.0] },
+  5: { bg: 0x8fd3ee, hemi: [0xdff3ff, 0x9cc07a, 0.75], moon: [0xfff0d6, 1.05], sun: [-9, 16, 8], day: true, fog: [45, 90] },   // 白天的海岛：太阳偏暖、影子清楚（亮度别太高，不然沙子一片白）
 };
+let isle = null, islandKit = null, noShadow = Q.has('noshadow');   // 手机太卡时自动关影子（见主循环）
 function setAct(n) {
   if (tileAct !== n) {
     for (const t of tiles) scene.remove(t);
     if (tiles[0]) tiles[0].traverse((o) => o.geometry && o.geometry.dispose());
     const proto = buildTile(n);
     tiles = []; for (let i = 0; i < 9; i++) { const t = proto.clone(); scene.add(t); tiles.push(t); }
-    if (!floors[n]) { floors[n] = FLOOR_FN[n](); floors[n].repeat.set(3, 3); }
-    floor.material.map = floors[n]; floor.material.needsUpdate = true;
+    if (n !== 5) {
+      if (!floors[n]) { floors[n] = FLOOR_FN[n](); floors[n].repeat.set(3, 3); }
+      floor.material.map = floors[n]; floor.material.needsUpdate = true;
+    }
     tileAct = n;
   }
+  // 第二部的海岛：不用无限地块，是一座有海岸的岛（src/island.js）。第一次进这一幕时才搭
+  const isl = n === 5;
+  if (isl && !isle) { isle = makeIsland(islandKit || {}); scene.add(isle.group); }
+  if (isle) isle.group.visible = isl;
+  floor.visible = !isl;
+  moon.castShadow = isl && !noShadow; heroLight.visible = !isl; heroGlow.visible = !isl;
+  shadowMesh.material.opacity = isl ? 0.45 : 1;
   curObs = OBS[n];
   const L = LOOKS[n];
-  scene.background.setHex(L.bg); scene.fog.color.setHex(L.bg);
+  scene.background.setHex(L.bg); scene.fog.color.setHex(L.bg); [scene.fog.near, scene.fog.far] = L.fog || [17, 33];
   hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
   moon.color.setHex(L.moon[0]); moon.intensity = L.moon[1]; moon.position.set(...(L.sun || [-6, 12, -4]));
   bier.visible = n === 4; bierLight.visible = n === 4;
@@ -461,6 +477,15 @@ function updateTiles(px, pz) {
 }
 // 把圆推出障碍物。障碍物离地块边至少 3 米，所以只查自己所在的那一块。
 function pushOut(p, r) {
+  if (act === 5 && isle) {   // 海岛：推出石头山、树、沉船；走到海边被挡住
+    for (const o of isle.obs) {
+      const dx = p.x - o.x, dz = p.z - o.z, rr = o.r + r, d2 = dx * dx + dz * dz;
+      if (d2 < rr * rr) { const d = Math.sqrt(d2) || 1e-3; p.x = o.x + dx / d * rr; p.z = o.z + dz / d * rr; }
+    }
+    const d = Math.hypot(p.x, p.z), lim = coastR(Math.atan2(p.z, p.x)) - 1.7 - r * 0.4;
+    if (d > lim) { p.x *= lim / d; p.z *= lim / d; }
+    return;
+  }
   if (act === 4) { const d = Math.hypot(p.x, p.z), rr = BIER_R + r; if (d < rr) { const k = rr / (d || 1e-3); p.x *= k; p.z *= k; } }
   const ox = Math.round(p.x / TILE) * TILE, oz = Math.round(p.z / TILE) * TILE;
   for (const o of curObs) {
@@ -471,6 +496,38 @@ function pushOut(p, r) {
 
 // ---------- 怪：参考图做的立牌，同一种怪一次画完 ----------
 const texLoader = new THREE.TextureLoader();
+// 模型都用 meshopt 压缩过（tools/compress-models.mjs），读的时候要解压
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+// 下载模型：GitHub Pages 不给 .glb 做 gzip，所以旁边放了一份 .glb.gz（小 30%），浏览器自己解压；
+// 老手机没有 DecompressionStream 就下原文件。失败了重试两次。下载进度记在 LOAD 里，封面上显示百分比。
+const GZ = typeof DecompressionStream !== 'undefined' && !Q.has('nogz');
+const LOAD = { got: {}, size: {} };
+let onLoadProgress = () => {};
+async function fetchBytes(url, key) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  const total = +res.headers.get('content-length');
+  if (total && !res.headers.get('content-encoding')) LOAD.size[key] = total;
+  if (!res.body || !res.body.getReader) { const b = new Uint8Array(await res.arrayBuffer()); LOAD.got[key] = b.length; onLoadProgress(); return b; }
+  const reader = res.body.getReader(), chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; LOAD.got[key] = got; onLoadProgress(); }
+  const buf = new Uint8Array(got); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+  return buf;
+}
+async function gunzip(b) {
+  if (b[0] !== 0x1f || b[1] !== 0x8b) return b;   // 服务器已经解压过了
+  return new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+}
+async function getGLB(url) {
+  for (let i = 0; ; i++) {
+    try {
+      let b = null;
+      if (GZ) b = await fetchBytes(url + '.gz', url).then(gunzip).catch((e) => { console.warn('gz 不行，下原文件', url, e); return null; });
+      if (!b) b = await fetchBytes(url, url);
+      return await loader.parseAsync(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), url.slice(0, url.lastIndexOf('/') + 1));
+    } catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1200 * (i + 1))); }
+  }
+}
 const TYPES = [
   { key: 'lute', h: 1.55, r: 0.5, hp: 2, speed: 2.1, dmg: 7, xp: 1, flip: false },
   { key: 'birdhead', h: 1.15, r: 0.36, hp: 1, speed: 3.9, dmg: 4, xp: 1, flip: true },
@@ -502,7 +559,7 @@ const MON = { lute: { yaw: -Math.PI / 2 }, birdhead: { yaw: Math.PI }, drum: { y
 const monFrames = [];   // monFrames[类型] = { meshes, n, dur }
 async function bakeMonster(ty) {
   const t = TYPES[ty], cfg = MON[t.key];
-  const g = await new GLTFLoader().loadAsync(`assets/models/monsters/${t.key}.glb`);
+  const g = await getGLB(`assets/models/monsters/${t.key}.glb`);
   const root = g.scene; root.updateMatrixWorld(true);
   let mesh = null; root.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
   const clip = g.animations[0]; let mixer = null;
@@ -536,7 +593,7 @@ async function bakeMonster(ty) {
     const m = new THREE.InstancedMesh(g2, mat, MAX_E);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_E * 3).fill(1), 3);
-    m.count = 0; m.frustumCulled = false; m.visible = false; scene.add(m);
+    m.count = 0; m.frustumCulled = false; m.visible = false; m.castShadow = true; scene.add(m);
     return m;
   });
   monFrames[ty] = { meshes, n: N, dur: clip ? clip.duration : 1 };
@@ -584,10 +641,9 @@ const ariel = new THREE.Group();
 ariel.visible = false; scene.add(ariel);
 
 // ---------- 角色模型 ----------
-const loader = new GLTFLoader();
 async function loadModel(name, height) {
-  const g = await loader.loadAsync(`assets/models/${name}.glb`);
-  const obj = g.scene; brighten(obj);
+  const g = await getGLB(`assets/models/${name}.glb`);
+  const obj = g.scene; brighten(obj); obj.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const s = height / size.y;
   obj.scale.setScalar(s); obj.position.set(-c.x * s, -box.min.y * s, -c.z * s);
@@ -611,9 +667,9 @@ function fixHip(clip, ref) {
   }
 }
 async function loadAnimated(name, height) {
-  const g = await loader.loadAsync(`assets/models/anim/${name}.glb`);
+  const g = await getGLB(`assets/models/anim/${name}.glb`);
   const obj = g.scene;
-  obj.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });   // 蒙皮网格按绑定姿势算包围球，动起来会被误裁掉
+  obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; } });   // 蒙皮网格按绑定姿势算包围球，动起来会被误裁掉
   brighten(obj);
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const s = height / size.y;
@@ -627,6 +683,28 @@ async function loadAnimated(name, height) {
   for (const clip of g.animations) { fixHip(clip, ref); actions[clip.name] = mixer.clipAction(clip); }
   Object.assign(wrap.userData, { inner, mixer, actions, cur: null });
   return wrap;
+}
+// 海岛的布景：Quaternius 自然素材包（CC0）里挑的 14 样，加上 Tripo 做的棕榈树、叠石山、石拱门。
+// 读成 { 名字: { parts: [{ geometry, material, rel }], box } } 交给 island.js 摆成实例化网格。材质换成便宜的 Lambert。
+const KIT_NAMES = ['CommonTree_3', 'CommonTree_4', 'Bush_Common', 'Bush_Common_Flowers', 'Rock_Medium_1', 'Rock_Medium_2', 'Rock_Medium_3', 'Pebble_Round_1', 'Pebble_Round_3', 'Grass_Common_Short', 'Flower_3_Group', 'Flower_4_Group', 'Fern_1', 'Plant_1'];
+function toLambert(m) {   // 再加一点自发光，树叶灌木在阳光下不发黑
+  const col = m.color ? m.color.clone() : new THREE.Color(0xffffff);
+  return new THREE.MeshLambertMaterial({ map: m.map || null, color: col, side: m.side, vertexColors: m.vertexColors, alphaTest: m.alphaTest || (m.transparent ? 0.5 : 0),
+    emissive: m.map ? 0xffffff : col.clone().multiplyScalar(0.2), emissiveMap: m.map || null, emissiveIntensity: m.map ? 0.2 : 1 });
+}
+async function loadIslandKit() {
+  const names = ['kit-nature', 'props/palm', 'props/pillar', 'props/arch'];
+  const got = await Promise.all(names.map((n) => getGLB(`assets/models/${n}.glb`).catch((e) => { console.warn('布景模型加载失败', n, e); return null; })));
+  const kit = {};
+  const take = (root, node, key) => {
+    root.updateMatrixWorld(true);
+    const inv = node.matrixWorld.clone().invert(), parts = [];
+    node.traverse((o) => { if (o.isMesh) parts.push({ geometry: o.geometry, material: toLambert(o.material), rel: inv.clone().multiply(o.matrixWorld) }); });
+    if (parts.length) kit[key] = { parts, box: new THREE.Box3().setFromObject(node).applyMatrix4(inv) };
+  };
+  if (got[0]) for (const n of KIT_NAMES) { const o = got[0].scene.getObjectByName(n); if (o) take(got[0].scene, o, n); }
+  ['palm', 'pillar', 'arch'].forEach((k, i) => { if (got[i + 1]) take(got[i + 1].scene, got[i + 1].scene, k); });
+  islandKit = kit;
 }
 // 切换动作：淡入新的、淡出旧的。once = 只播一次，停在最后一帧（比如茂丘西奥倒下）
 function playAnim(w, name, { fade = 0.22, once = false, speed = 1 } = {}) {
@@ -885,6 +963,7 @@ ui.innerHTML = `
 <div id="cover" data-ui><div class="cbg"><img class="c1" alt="" src="assets/cg/key-rj.jpg"><img class="c2" alt="" src="assets/cg/key-tp.jpg"></div>
  <div class="clogo"><small>一首情歌，改写两个结局</small><h1>莎士比亚的两场戏</h1><p>罗密欧与朱丽叶 · 暴风雨</p></div>
  <p class="cgo">加载中……</p><p class="chint">手机横过来玩 · 开声音更好听</p><p class="fshint2"></p></div>
+<div id="wait" class="hide"><span>布景还在搬上台</span><b>0%</b><small>网络慢的话要等一会儿</small></div>
 <div id="over" class="hide" data-ui><h1></h1><p class="sub"></p><p class="tip"></p><div class="btns"></div></div>
 <div id="cast" class="hide" data-ui><h2>人物关系</h2><div class="row"></div><p class="hint">点一下继续</p></div>
 <div id="mem" class="hide" data-ui><div class="inner"><h2></h2><p class="stat"></p><h3>名画</h3><div class="grid g-paint"></div><h3>插图</h3><div class="grid g-cg"></div><h3>你说过的情话</h3><ul class="said"></ul><div class="btns"><button class="b-back">返回</button><button class="b-clear">清空存档</button></div></div></div>
@@ -900,6 +979,8 @@ ui.innerHTML = `
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
 const $ = (s) => ui.querySelector(s);
 const show = (el, on = true) => el.classList.toggle('hide', !on);
+// 游戏自己的封面出来了，去掉网页一打开就显示的那张（index.html 里的 #boot），等封面图下好再去，免得中间闪一下黑
+{ const b = document.getElementById('boot'), im = ui.querySelector('#cover .c1'); const off = () => b && b.remove(); if (im.complete) off(); else { im.onload = im.onerror = off; setTimeout(off, 12000); } }
 
 // 打斗中的喊话：屏幕上方一条，不暂停
 let barkT = 0;
@@ -913,12 +994,33 @@ function bark(who, text) {
 
 // 幕间对话：点一下出下一句
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 插图：先在后台下好、解码好再换上去，没下好之前保留上一张（或者露出游戏画面），不会闪黑屏（10-31 用户说"黑屏的很多"）
+const imgCache = {};
+function loadImg(src) {
+  return imgCache[src] || (imgCache[src] = new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()).then(() => res(i));
+    i.onerror = () => { delete imgCache[src]; rej(new Error(src)); }; i.src = src;
+  }));
+}
+// 进一个故事时，把它的插图、名画、头像都先下起来
+function preloadStory(story) {
+  const pre = story === 'tp' ? 'tp-' : 'rj-';
+  for (const k of CG_ALL) if (k.startsWith(pre)) loadImg(`assets/cg/${k}.jpg`).catch(() => {});
+  for (const p of Object.values(PEOPLE)) if (p.img) loadImg(p.img).catch(() => {});
+  for (const k of PAINT_ALL) if ((story === 'tp') === k.startsWith('tp')) loadImg(PAINTINGS[k].img).catch(() => {});
+}
+let cgWant = null;
 function setCG(name) {
   const box = $('#dlg .cg'), img = box.querySelector('img');
+  cgWant = name;
   if (!name) { show(box, false); return; }
-  img.src = `assets/cg/${name}.jpg`; show(box);
-  box.classList.remove('kb'); void box.offsetWidth; box.classList.add('kb');
   unlock('cgs', name);
+  const src = `assets/cg/${name}.jpg`;
+  loadImg(src).then(() => {
+    if (cgWant !== name) return;
+    img.src = src; show(box);
+    box.classList.remove('kb'); void box.offsetWidth; box.classList.add('kb');
+  }).catch(() => {});
 }
 function showCast() {
   return new Promise((resolve) => {
@@ -1027,7 +1129,7 @@ async function startStory(story, from, again) {
   if (!again) { save.plays++; persist(); }
   if (story === 'tp') {
     if (!again) await playScene(SCENES.tpIntro);
-    beginAct(5); return;
+    await waitRest(); beginAct(5); return;
   }
   if (from > 1) {   // 选关卡或继续：有这一幕的存档就用自己的等级和技能，没有就送一套够用的
     const snap = save.rj.snaps[from];
@@ -1035,13 +1137,13 @@ async function startStory(story, from, again) {
     else giveBuild(from);
     player.hp = maxHp();
     if (!again && SCENES[`act${from - 1}To${from}`]) await playScene(SCENES[`act${from - 1}To${from}`]);   // 先放这一幕前面的剧情，好知道故事走到哪了
-    beginAct(from); return;
+    await waitRest(); beginAct(from); return;
   }
   if (START_ACT > 1 && !again) {   // 测试用：直接从后面的幕开始，先送几级
     for (const id of ['chord', 'presto', 'sustain', 'chord']) { takeSkill(id); level++; }
-    if (START_ACT === 5) { beginAct(5); return; }
+    if (START_ACT === 5) { await waitRest(); beginAct(5); return; }
   } else if (!again) await playScene(SCENES.prologue);
-  beginAct(again ? 1 : START_ACT);
+  await waitRest(); beginAct(again ? 1 : START_ACT);
 }
 const startRun = (again) => startStory('rj', 1, again);
 // 直接从后面的幕开始、又没有存档时，送的技能和等级（大约是正常打到那一幕的水平）
@@ -1065,6 +1167,7 @@ function beginAct(n, retry) {
   if (tybalt) tybalt.visible = false;
   if (mercutio) { mercutio.visible = n === 3; mercutio.position.set(-1.6, 0, 1.2); mercutio.userData.inner.rotation.set(0, 0, 0); }
   if (n === 4) { player.z = 3.2; if (juliet) { juliet.visible = true; layJuliet(true); } }
+  if (n === 5) { player.x = ISLE_START.x; player.z = ISLE_START.z; }
   setAct(n);
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
@@ -1517,9 +1620,14 @@ function draw(dt) {
   }
   heroLight.position.set(player.x, 2.6, player.z + 1.2);
   heroGlow.position.x = player.x; heroGlow.position.z = player.z;
+  if (isle && isle.group.visible) {   // 海岛：太阳和影子的范围跟着主角（往画面上方多照一点），海浪和小船动起来
+    const sun = LOOKS[5].sun, tx = player.x, tz = player.z - 4;
+    moon.target.position.set(tx, 0, tz); moon.position.set(tx + sun[0] * 2, sun[1] * 2, tz + sun[2] * 2);
+    isle.tick(time);
+  }
 
   // 镜头：打的时候跟着主角；幕结束时拉近；名画定格时拉起
-  const want = phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1;
+  const want = (phase === 'actEnd' ? 0.62 : phase === 'card' ? 1.5 : phase === 'title' || phase === 'over' ? 0.8 : 1) * (act === 5 ? 1.12 : 1);   // 海岛镜头高一点，多看到海
   camDist += (want - camDist) * Math.min(1, dt * 2.2);
   const panX = phase === 'title' || phase === 'over' ? 5.5 : 0;   // 开始和结束画面：镜头往右平移，主角站到画面左边，别挡住标题
   camTarget.set(player.x + panX + CAM.x * camDist, CAM.y * camDist, player.z + CAM.z * camDist);
@@ -1573,7 +1681,7 @@ function goFullscreen() {
 
 // ---------- 开始画面 ----------
 let titleReady = false;
-function go(story, from) { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); startStory(story, from); }
+function go(story, from) { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); preloadStory(story); startStory(story, from); }
 // 开始画面：两个故事、继续、回忆、怎么玩、名字
 function refreshTitle() {
   const hello = $('#title .hello');
@@ -1647,15 +1755,46 @@ $('#mem .b-back').onclick = () => show($('#mem'), false);
 $('#mem .b-clear').onclick = () => { if (confirm('清空这台手机上的存档和回忆？')) { resetSave(); show($('#mem'), false); refreshTitle(); } };
 $('#viewer').onclick = () => show($('#viewer'), false);
 
-Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95), loadAnimated('tybalt', 2.3), loadAnimated('mercutio', 1.85), loadAnimated('caliban', 2.7).catch(() => null), loadMonsters()]).then(([h, j, t, m, c]) => {
-  hero = h; juliet = j; tybalt = t; mercutio = m; caliban = c;
-  scene.add(hero, juliet, tybalt, mercutio); if (caliban) scene.add(caliban);
-  juliet.visible = tybalt.visible = mercutio.visible = false; if (caliban) caliban.visible = false;
-  titleReady = true; coverReady = true;
+// 分两批下载（10-31 用户说微信里"打不开、黑屏的很多"：原来 5MB 模型全下完才能进）：
+// 第一批只有罗密欧和朱丽叶，下完就能点进去看开场剧情；其余的（另外三个角色、6 种怪、海岛的树和石头）在后台接着下，
+// 真要开打时还没下完，就在画面上显示进度等一下。封面上显示百分比。
+const CORE = ['anim/romeo', 'wedding-dress'];
+const REST = ['anim/tybalt', 'anim/mercutio', 'anim/caliban', ...TYPES.filter((t) => MON[t.key]).map((t) => `monsters/${t.key}`), 'kit-nature', 'props/palm', 'props/pillar', 'props/arch'];
+// 每个文件大约多大（KB，.gz 的），服务器报大小之前先用这个算百分比
+Object.entries({ 'anim/romeo': 609, 'wedding-dress': 239, 'anim/tybalt': 566, 'anim/mercutio': 525, 'anim/caliban': 370, 'monsters/lute': 152, 'monsters/birdhead': 127, 'monsters/drum': 119,
+  'monsters/cerberus': 96, 'monsters/horn': 84, 'monsters/shade': 76, 'kit-nature': 454, 'props/palm': 67, 'props/pillar': 58, 'props/arch': 75 }).forEach(([k, v]) => { LOAD.size[`assets/models/${k}.glb`] = v * 1024; });
+const pct = (list) => { let a = 0, b = 0; for (const p of list) { const u = `assets/models/${p}.glb`, s = LOAD.size[u] || 300000; a += Math.min(LOAD.got[u] || 0, s); b += s; } return Math.min(99, Math.floor(a / b * 100)); };
+let coreDone = false;
+onLoadProgress = () => {
+  if (!coreDone) $('#cover .cgo').textContent = `加载中 ${pct(CORE)}%`;
+  const w = $('#wait'); if (!w.classList.contains('hide')) w.querySelector('b').textContent = `${pct(REST)}%`;
+};
+const coreP = Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95)]).then(([h, j]) => {
+  hero = h; juliet = j; scene.add(hero, juliet); juliet.visible = false;
+  coreDone = true; titleReady = true; coverReady = true;
   $('#cover .cgo').textContent = '点一下进入';
   refreshTitle();
-  if (AUTO) { show($('#cover'), false); go(START_ACT === 5 ? 'tp' : 'rj', START_ACT > 1 && START_ACT < 5 ? 1 : 1); }
-}).catch((e) => { $('#title .go').textContent = '加载失败，请刷新：' + e.message; console.error(e); });
+});
+coreP.catch((e) => { $('#cover .cgo').textContent = '网络不太好，点这里重新加载'; coverReady = false; $('#cover').onclick = () => location.reload(); console.error(e); });
+// 第二批：每样东西失败了不影响别的（怪用立牌代替，海岛少几棵树）；角色失败了就一直重试
+const keep = (fn) => fn().catch(() => new Promise((r) => setTimeout(r, 2500)).then(() => keep(fn)));
+const restP = coreP.then(() => Promise.all([
+  keep(() => loadAnimated('tybalt', 2.3)).then((t) => { tybalt = t; t.visible = false; scene.add(t); }),
+  keep(() => loadAnimated('mercutio', 1.85)).then((m) => { mercutio = m; m.visible = false; scene.add(m); }),
+  loadAnimated('caliban', 2.7).then((c) => { caliban = c; c.visible = false; scene.add(c); }).catch(() => null),
+  loadMonsters(),
+  loadIslandKit().catch((e) => console.warn('海岛布景加载失败', e)),
+]));
+restP.then(() => { if (DEBUG) console.log('全部加载完'); });
+// 开打前：第二批还没下完就等一下，画面上显示进度
+async function waitRest() {
+  let done = false; restP.then(() => { done = true; });
+  await sleep(0);
+  if (done) return;
+  const w = $('#wait'); show(w); onLoadProgress();
+  await restP; show(w, false);
+}
+if (AUTO) coreP.then(() => { show($('#cover'), false); go(START_ACT === 5 ? 'tp' : 'rj', 1); });
 
 // 给自动测试用的接口
 window.__game = {
@@ -1680,7 +1819,11 @@ function loop(now) {
   if (now - fpsT >= 1000) {
     window.__fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now;
     // 自动降画质：打斗中连续 2 秒低于 40 帧，清晰度降一档（最低 1），不再升回去
-    if (phase === 'fight' && window.__fps < 40) { slowSecs++; if (slowSecs >= 2 && pixelCap > 1 && renderer.getPixelRatio() > 1) { pixelCap = Math.max(1, renderer.getPixelRatio() - 0.25); layout(); slowSecs = 0; } } else slowSecs = 0;
+    if (phase === 'fight' && window.__fps < 40) {
+      slowSecs++;
+      if (slowSecs >= 2 && pixelCap > 1 && renderer.getPixelRatio() > 1) { pixelCap = Math.max(1, renderer.getPixelRatio() - 0.25); layout(); slowSecs = 0; }
+      else if (slowSecs >= 3 && moon.castShadow && !AUTO) { noShadow = true; moon.castShadow = false; slowSecs = 0; }   // 清晰度降到底还卡：海岛关掉影子
+    } else slowSecs = 0;
     if (DEBUG) { const info = renderer.info.render; $('#fps').textContent = `${window.__fps.toFixed(0)} 帧 · 怪 ${E.n} · 音符 ${B.n} · ${(info.triangles / 1000).toFixed(0)}k 面 · ${info.calls} 次绘制`; }
   }
 }

@@ -7,11 +7,12 @@
 // 检查 3D 怪的正面朝哪：每列一只怪，四行是镜头分别在 +Z、+X、-Z、-X 方向看过去。哪一行看到脸，脸就朝那个方向。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 const N = ['lute', 'birdhead', 'drum', 'horn', 'shade', 'cerberus'];
 const W = innerWidth, H = innerHeight, cw = W / N.length, ch = H / 4;
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true);
 document.body.appendChild(r.domElement);
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const objs = await Promise.all(N.map((n) => loader.loadAsync(`../../assets/models/monsters/${n}.glb`).then((g) => g.scene)));
 const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 100);
 objs.forEach((o, i) => {

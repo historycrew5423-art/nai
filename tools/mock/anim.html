@@ -7,6 +7,7 @@
 // 检查 Tripo 绑骨加动作的结果：一个角色的每个动作取 4 个时间点，排成一张图。?m=romeo|tybalt|mercutio
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 const name = new URLSearchParams(location.search).get('m') || 'romeo';
 const W = innerWidth, H = innerHeight;
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -15,7 +16,7 @@ document.body.appendChild(r.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2a2430);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x554466, 2.2));
 const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 4, 5); scene.add(key);
-const g = await new GLTFLoader().loadAsync(`../../assets/models/anim/${name}.glb`);
+const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`../../assets/models/anim/${name}.glb`);
 const obj = g.scene; scene.add(obj);
 const box = new THREE.Box3().setFromObject(obj), h = box.getSize(new THREE.Vector3()).y, cy = box.getCenter(new THREE.Vector3()).y;
 const mixer = new THREE.AnimationMixer(obj);

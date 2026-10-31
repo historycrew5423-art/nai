@@ -7,6 +7,7 @@
 // 给出图接口当角色参考用：白底，一个角色的正面和四分之三侧面并排。?m=fantasy|wedding-dress|minotaur|rabbit
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const name = new URLSearchParams(location.search).get('m') || 'fantasy';
 const W = innerWidth, H = innerHeight;
@@ -19,7 +20,7 @@ scene.background = new THREE.Color(0xffffff);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2));
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(2, 4, 5); scene.add(key);
 
-const gltf = await new GLTFLoader().loadAsync(`../../assets/models/${name}.glb`);
+const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`../../assets/models/${name}.glb`);
 const obj = gltf.scene; scene.add(obj);
 const box = new THREE.Box3().setFromObject(obj);
 const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());

@@ -64,5 +64,7 @@
 
 ## 素材和许可
 - three.js r187（MIT），放在 `vendor/three/`。
+- 海岛的树、灌木、花、草、蕨、石头：Quaternius「Stylized Nature MegaKit」（CC0，来自 [OpenGameArt](https://opengameart.org/content/stylized-nature-megakit)），挑了 14 样打包成 `assets/models/kit-nature.glb`。
+- 棕榈树、叠石山、石拱门：GPT 出参考图（`assets/ref/prop-*.png`），Tripo 生成（`assets/models/props/`）。
 - 角色模型：用户用 Tripo 生成（`assets/models/`）。参考图：用户和 AI 用出图工具生成（`assets/ref/`，AI 出的图记在 `assets/ref/生成记录.md`）。
 - 名画：游戏里放的是 GPT-image-2.5 重画的油画（`assets/paintings/`），构图来自四幅公有领域的原作，原作的出处见 [assets/ref/originals/README.md](assets/ref/originals/README.md)。原作图只当出图参考，游戏里不用。

@@ -8,6 +8,7 @@
 // ?hero=fantasy|minotaur|rabbit 选主角。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const W = innerWidth, H = innerHeight;
@@ -97,7 +98,7 @@ scene.add(flies);
 
 // 主角：真实模型，按 1.5 米高放好，脚下一圈影子
 const hero = new URLSearchParams(location.search).get('hero') || 'fantasy';
-const g = await new GLTFLoader().loadAsync(`../../assets/models/${hero}.glb`);
+const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`../../assets/models/${hero}.glb`);
 const m = g.scene; const box = new THREE.Box3().setFromObject(m); const h = box.max.y - box.min.y;
 m.scale.setScalar(1.9 / h); m.rotation.y = -2.3 + Math.PI / 2 + 0.3; scene.add(m);
 const sc = document.createElement('canvas'); sc.width = sc.height = 64; const sg = sc.getContext('2d');
