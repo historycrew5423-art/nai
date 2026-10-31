@@ -9,8 +9,8 @@ export const SONG_SLOTS = 4, MOOD_SLOTS = 4;
 export const SKILLS = [
   // ---- 唱法 ----
   { id: 'love', name: '情歌', kind: 'song', max: 5, evo: 'aria', with: 'forte', tag: 'single',
-    desc: ['朝走路的方向唱，音符会拐弯追上前面的怪', '一次 2 个音符', '一次 3 个音符', '唱得更快 +20%', '一次 5 个音符'],
-    apply(s, lv) { s.projectiles = [1, 1, 2, 3, 3, 5][lv]; if (lv === 4) s.rateMul *= 1.2; } },
+    desc: ['朝走路的方向唱，音符会拐弯追上前面的怪', '唱得更快 +25%', '一次 2 个音符', '一次 3 个音符', '一次 4 个音符'],
+    apply(s, lv) { s.projectiles = [1, 1, 1, 2, 3, 4][lv]; if (lv === 2) s.rateMul *= 1.25; } },
   { id: 'echo', name: '回声', kind: 'song', max: 3, evo: 'choir', with: 'presto', tag: 'crowd',
     desc: ['身后也唱：背后的怪也打得到', '左右两边也唱', '每个方向都多一个音符'],
     apply(s, lv) { s.echo = lv; } },

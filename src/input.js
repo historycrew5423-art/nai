@@ -39,7 +39,9 @@ export class Input {
     let onButton = false;
     for (const t of e.changedTouches) {
       if (t.target.closest && t.target.closest('button, [data-ui]:not(.hide)')) { onButton = true; continue; } // 按钮和对话框、选卡这些界面：照常点击，不当成摇杆
-      const side = 'left';   // 10-31 第 55 轮：只用一根手指走，在屏幕哪里按下都行；唱歌全自动（朝走路的方向）
+      // 10-31 第 58 轮：双摇杆回来。横屏：左半边走、右半边瞄准；竖屏：第一根手指走（哪里都行），第二根手指瞄准。不碰右边就朝走路的方向自动唱
+      const portrait = innerHeight > innerWidth, moving = [...this.touches.values()].some((s2) => s2.side === 'left');
+      const side = portrait ? (moving ? 'right' : 'left') : (t.clientX < innerWidth / 2 ? 'left' : 'right');
       if ([...this.touches.values()].some((s) => s.side === side)) continue;
       const el = this.sticks[side];
       el.style.display = 'block';

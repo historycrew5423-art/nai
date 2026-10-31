@@ -398,3 +398,27 @@ body.portrait #rotate { display: none; }   /* 10-31 第 57 轮：竖屏也能玩
 @keyframes ultpulse { to { transform: scale(1.07); } }
 #stage.portrait #ult { width: calc(var(--u) * 20); height: calc(var(--u) * 20); bottom: calc(var(--u) * 10 + var(--sb)); }
 #laughgif { position: absolute; left: calc(var(--u) * 3 + var(--sl)); top: calc(var(--u) * 12); width: calc(var(--u) * 24); z-index: 3; pointer-events: none; filter: drop-shadow(0 0 calc(var(--u) * 2) rgba(255,220,120,.8)); }
+
+#fdu { position: absolute; right: calc(var(--u) * 6 + var(--sr)); bottom: calc(var(--u) * 23 + var(--sb)); width: calc(var(--u) * 11); height: calc(var(--u) * 11); border-radius: 50%; border: 0; z-index: 3;
+  background: conic-gradient(#ff8ab8 calc(var(--f, 0) * 360deg), rgba(255,255,255,.15) 0); padding: calc(var(--u) * .8); }
+#fdu i { position: absolute; inset: calc(var(--u) * .8); border-radius: 50%; background: radial-gradient(circle at 50% 35%, #ffd0e0, #e06a98 70%); filter: grayscale(.7) brightness(.7); }
+#fdu b { position: relative; font-size: calc(var(--u) * 4.6); }
+#fdu.ready i { filter: none; box-shadow: 0 0 calc(var(--u) * 3) rgba(255, 140, 190, .9); animation: ultpulse .8s infinite alternate; }
+#stage.portrait #fdu { width: calc(var(--u) * 15); height: calc(var(--u) * 15); bottom: calc(var(--u) * 34 + var(--sb)); right: calc(var(--u) * 7); }
+#fx .cheer.wave { top: 22%; font-size: calc(var(--u) * 6.5); }
+
+/* 选版本：经典版 / 抽象版 */
+#modes { position: absolute; inset: 0; z-index: 7; background: radial-gradient(ellipse at 50% 40%, #2a1e2e, #0c0a10 80%); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+#modes h2 { font-family: var(--serif, serif); font-weight: 900; font-size: calc(var(--u) * 6.5); margin: 0 0 calc(var(--u) * 3);
+  background: linear-gradient(180deg, #fff6d8, #e8a648); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 calc(var(--u) * 1.5) rgba(255,170,70,.5)); }
+#modes .row { display: flex; gap: calc(var(--u) * 4); }
+#modes button { width: calc(var(--u) * 62); padding: 0 0 calc(var(--u) * 2); border: 2px solid #c99a4a; border-radius: calc(var(--u) * 2); overflow: hidden; color: #f2ede4; font-family: var(--serif, serif);
+  background: linear-gradient(180deg, rgba(48,34,52,.96), rgba(20,14,24,.97)); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 1.2); box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(0,0,0,.6); }
+#modes button img { width: 100%; height: calc(var(--u) * 30); object-fit: cover; background: #f4e8c8; }
+#modes .m-abstract img { object-fit: contain; }
+#modes button b { font-size: calc(var(--u) * 6); font-weight: 900; color: #ffd98a; letter-spacing: .2em; }
+#modes button small { font-size: calc(var(--u) * 2.6); line-height: 1.5; padding: 0 calc(var(--u) * 3); opacity: .9; }
+#modes .note { font-size: calc(var(--u) * 2.6); opacity: .7; margin-top: calc(var(--u) * 2.6); }
+#stage.portrait #modes .row { flex-direction: column; gap: calc(var(--u) * 3); }
+#stage.portrait #modes button { width: calc(var(--u) * 84); }
+#stage.portrait #modes button img { height: calc(var(--u) * 34); }

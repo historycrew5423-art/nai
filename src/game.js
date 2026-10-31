@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Input } from './input.js?v=20261031o';
-import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031o';
-import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031o';
-import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031o';
-import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031o';
+import { Input } from './input.js?v=20261031q';
+import { byId, drawCards, baseStats, EVOS, evoReady } from './skills.js?v=20261031q';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js?v=20261031q';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js?v=20261031q';
+import { makeIsland, coastR, landD, local as isleLocal, CELL as ISLE_CELL, START as ISLE_START } from './island.js?v=20261031q';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -856,7 +856,7 @@ let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossCharge
 let phase = 'title';            // title → story → fight → levelup → actEnd → card → over
 const maxHp = () => 80 + stats.maxHpBonus;   // 10-31：100 太简单、60 太难，取 80（再加自动调难度）
 let runRoses = 0;
-const xpNeed = (L) => (L < 4 ? [0, 3, 5, 8][L] : Math.round(5.5 * Math.pow(L, 1.5)));   // 前 30 秒左右升三级，马上有得选；之后慢下来   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
+const xpNeed = (L) => (L < 4 ? [0, 4, 7, 11][L] : Math.round(5.5 * Math.pow(L, 1.5)));   // 10-31 第 58 轮：开局别一下子太强   // 前 30 秒左右升三级，马上有得选；之后慢下来   // 10-31 用户说升级太快：比原来慢一半左右（第 2 级要 3 个，第 5 级要 41 个）
 const input = new Input();
 
 function resetRun() {
@@ -881,7 +881,7 @@ function spawnEnemy(type, ang, dist, cx = player.x, cz = player.z) {
   pushOut(p, 0.6);
   const t = TYPES[type], i = E.n++;
   E.type[i] = type; E.x[i] = p.x; E.z[i] = p.z; E.flash[i] = 0; E.wind[i] = 0; E.phase[i] = Math.random() * 10; E.ocd[i] = 0; E.face[i] = 1; E.atk[i] = 1 + Math.random() * 2;
-  E.hp[i] = (t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0)) * (t.boss ? 1.2 : 1.2) * (fate.tough || 1) * (actTime < ACT_LEN * 0.45 && !t.boss ? 1.5 : 1);   // 前半段怪少而硬
+  E.hp[i] = (t.hp + HP_ADD[type] * (act - 1) + (type === T.lute && act === 1 && actTime > 22 ? 1 : 0)) * (t.boss ? 1.2 : 1) * (fate.tough || 1) * (1 + waveN * 0.12);   // 一波比一波耐打
   E.elite[i] = 0; E.sk[i] = 1.5 + Math.random() * 3; E.st[i] = 0; E.state[i] = 0;
   E.speed[i] = t.speed * (0.85 + Math.random() * 0.3) * fate.espd; E.id[i] = nextId++; E.maxhp[i] = E.hp[i];
 }
@@ -892,8 +892,8 @@ function director(dt) {
   if (act === 3) { director3(dt); return; }
   if (act === 4) { director4(dt); return; }
   if (act === 5) { director5(dt); return; }
-  const target = act1Target(actTime) * 0.6 * ddaK();   // 血少时悄悄少出一点；10-31 怪少一些、更凶
-  spawnAcc += dt * (actTime < 20 ? 1.5 : 4);
+  const target = act1Target(actTime) * 1.1 * ddaK();   // 10-31 第 58 轮：怪多一些；前 12 秒很少，后面越来越多
+  spawnAcc += dt * (actTime < 12 ? 1.5 : 6);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
   // 鸟嘴面具客人：第 25 秒起，每 6 秒从一个方向冲来一小群
   if (actTime > 25 + birdWaves * 6 && actTime < ACT_LEN - 3) {
@@ -907,8 +907,8 @@ function director(dt) {
 const DOG_AT = Math.min(22, ACT_LEN * 0.5);
 function director2(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (22 + actTime * 0.8) * 0.6 * (boss ? 0.45 : 1) * ddaK();
-  spawnAcc += dt * 5;
+  const target = (22 + actTime * 0.8) * (boss ? 0.5 : 1) * ddaK();
+  spawnAcc += dt * 7;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(Math.random() < 0.28 ? T.drum : T.lute); }
   if (!boss && actTime > 5 + birdWaves * 7) {
     birdWaves++;
@@ -926,8 +926,8 @@ const count = (ty) => { let c = 0; for (let i = 0; i < E.n; i++) if (E.type[i] =
 // 第三幕：两家的人潮最多最厚，号角怪站在远处吹酸音；第 18 秒茂丘西奥倒下，第 22 秒提伯尔特出场
 function director3(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (30 + actTime * 0.9) * 0.6 * (boss ? 0.5 : 1) * ddaK();
-  spawnAcc += dt * 5.5;
+  const target = (30 + actTime * 0.9) * (boss ? 0.55 : 1) * ddaK();
+  spawnAcc += dt * 8;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
     const r = Math.random();
@@ -956,8 +956,8 @@ function director3(dt) {
 // 第二部「漂岛」：被冲上岸的乐器、成群的海鸟、海浪精灵（亡魂的样子），第 22 秒卡利班出场
 function director5(dt) {
   const boss = dogSpawned && !dogDown;
-  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * 0.6 * (boss ? 0.5 : 1) * ddaK();
-  spawnAcc += dt * 4.5;
+  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.9) * (boss ? 0.55 : 1) * ddaK();
+  spawnAcc += dt * 7;
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n >= target) continue; const r = Math.random(); spawnEnemy(r < 0.4 ? T.shade : r < 0.75 ? T.lute : T.drum); }
   if (!boss && actTime > 8 + birdWaves * 7) {
     birdWaves++;
@@ -973,8 +973,8 @@ function director5(dt) {
 }
 // 第四幕：亡魂从四面八方涌向石台上的朱丽叶，也有一些家丁冲着罗密欧来
 function director4(dt) {
-  const target = (16 + actTime * 0.9) * 0.7 * ddaK();
-  spawnAcc += dt * 4.5;
+  const target = (16 + actTime * 0.9) * ddaK();
+  spawnAcc += dt * 6;
   while (spawnAcc >= 1) {
     spawnAcc -= 1; if (E.n >= target) continue;
     if (Math.random() < 0.85) spawnEnemy(T.shade, undefined, 17 + Math.random() * 4, 0, 0);
@@ -1074,7 +1074,7 @@ function unlockAudio() {
     a.play().catch(() => {});
   } catch {}
 }
-function initAudio() { unlockAudio(); try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); bgmStart(); } catch { actx = null; } }
+function initAudio() { unlockAudio(); try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); bgmStart(); loadMemes(); } catch { actx = null; } }
 // 第一次碰屏幕就打开声音（微信里也要在手指点下去的那一刻）
 for (const ev of ['touchend', 'click']) document.addEventListener(ev, () => initAudio(), { capture: true, passive: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && actx) actx.resume(); });
@@ -1126,12 +1126,32 @@ function sfxLevel() { [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(nt(n), { 
 function sfxStep() { if (gate('step', 140)) burst({ dur: 0.04, vol: 0.012, freq: 900, q: 1.5 }); }
 // 小怪的叫声（我们自己合成的，不用网上来源不明的梗音效）：每种第一次出现一定叫，之后隔 4 到 7 秒才叫一次；
 // 大笑的时候、有人在说话的时候不叫（主角和旁白的声音最突出，学队友版的"声音分层"）
+// 10-31 第 58 轮：用户要队友版的抽象音效，但不要全程都有。用 Web Audio 解码好放在内存里，按"梗的节奏"放：
+// 每种第一次一定响；之后最冷时 7 秒一声、越打越热闹（最热时 3 秒一声）；大笑和肥嘟嘟之后安静 2.5 秒；主角的口头禅隔 10 秒以上
+const MEME = { lute: ['daodun'], drum: ['banana-cry-1'], birdhead: ['gugugaga-1', 'gugugaga-2'], horn: ['oiia-1'], shade: ['oiia-2'], dodge: ['shanshenbu'], feidudu: ['feidudu'], lines: ['nl-hola-gabadie', 'nl-gajiaosai', 'nl-gagadilashui', 'nl-dupu'], laugh: ['naiwa-baoxiao'] };
+const memeBuf = {}; let memeLoading = false, memeQuiet = 0, lineNext = 0;
+function loadMemes() {
+  if (memeLoading || !actx || !Q.has('meme')) return; memeLoading = true;   // 经典版不放队友的梗音效（在抽象版里），网址加 ?meme=1 才放
+  for (const n of new Set(Object.values(MEME).flat())) fetch(`assets/audio/meme/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => new Promise((ok, no) => actx.decodeAudioData(b, ok, no))).then((buf) => { memeBuf[n] = buf; }).catch(() => {});
+}
+function meme(kind, vol = 0.8, force = false, maxDur = 0) {
+  if (!actx || muted) return false;
+  const list = MEME[kind]; if (!list) return false; const name = list[Math.floor(Math.random() * list.length)], buf = memeBuf[name]; if (!buf) return false;
+  if (!force && performance.now() < memeQuiet) return false;
+  const src = actx.createBufferSource(), g = actx.createGain(); src.buffer = buf; g.gain.value = vol; src.connect(g).connect(actx.destination);
+  src.start(); if (maxDur) src.stop(actx.currentTime + maxDur);
+  return true;
+}
+function heroLine() { const now = performance.now(); if (now < lineNext || laughT > 0) return; lineNext = now + 10000 + Math.random() * 6000; meme('lines', 0.9, true); memeQuiet = now + 2000; }
 const VOICED = new Set(); let voiceNext = 0;
 function monsterVoice(key, x) {
   if (!actx || muted || laughT > 0) return;
   const now = performance.now(), first = !VOICED.has(key);
   if (!first && (now < voiceNext || barkT > 0.3)) return;
-  VOICED.add(key); voiceNext = now + 4000 + Math.random() * 3000;
+  VOICED.add(key);
+  const heat = Math.min(1, actTime / ACT_LEN + (act - 1) * 0.2);
+  voiceNext = now + (7000 - heat * 4000) * (0.8 + Math.random() * 0.4);
+  if (memeBuf[MEME[key]?.[0]] && meme(key, 0.55, false, 2.2)) { if (first) floatText(x, player.z - 2, { lute: '“我的刀盾！”', drum: '“呜哇——”', birdhead: '“咕咕嘎嘎！”', horn: '“OIIA OIIA”', shade: '“OIIA——”' }[key]); return; }
   const v = 0.05;
   if (key === 'lute') { tone(330, { dur: 0.18, vol: v, type: 'square' }); tone(349, { t0: 0.12, dur: 0.25, vol: v, type: 'square' }); }   // 走调的两声
   else if (key === 'drum') { tone(110, { dur: 0.16, vol: v * 2, to: 70 }); tone(110, { t0: 0.18, dur: 0.22, vol: v * 2, to: 60 }); }      // 咚咚
@@ -1183,7 +1203,7 @@ ui.innerHTML = `
   <div class="story" data-s="rj"><img alt="" src="assets/cg/key-rj.jpg"><div class="st"><b>第一部 · 罗密欧与朱丽叶</b><small>选一幕开始</small><div class="acts"></div><div class="sb"></div></div></div>
   <div class="story" data-s="tp"><img alt="" src="assets/cg/key-tp.jpg"><div class="st"><b>第二部 · 暴风雨</b><small>新 · 海上的魔法岛</small><div class="acts"></div><div class="sb"></div></div></div>
  </div>
- <div class="tfoot"><span class="hello"></span><button class="b-shop">后台 🌹</button><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
+ <div class="tfoot"><span class="hello"></span><button class="b-modes">换版本</button><button class="b-shop">后台 🌹</button><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
  <p class="go">加载中……</p><p class="ver">${VERSION} 开发中</p><p class="fshint hide"></p></div>
 <div id="cover" data-ui><div class="cbg"><img class="c1" alt="" src="assets/cg/key-rj.jpg"><img class="c2" alt="" src="assets/cg/key-tp.jpg"></div>
  <div class="clogo"><small>一首情歌，改写两个结局</small><h1>莎士比亚的两场戏</h1><p>罗密欧与朱丽叶 · 暴风雨</p></div>
@@ -1199,6 +1219,10 @@ ui.innerHTML = `
  <li>第一部的最后一幕：守住沉睡的朱丽叶，就能<b>改写结局</b>。</li>
  <li>进度存在这台手机里，下次打开能从上次那一幕<b>继续</b>。</li></ul><div class="btns"><button class="b-back">返回</button></div></div></div>
 <div id="viewer" class="hide" data-ui><img alt=""></div>
+<div id="modes" class="hide" data-ui><h2>选一个版本来玩</h2><div class="row">
+ <button class="m-classic"><img alt="" src="assets/cg/key-rj.jpg"><b>经典版</b><small>莎士比亚的两场戏：剧情、名画、精致的 3D 场景，罗密欧与朱丽叶 + 暴风雨</small></button>
+ <button class="m-abstract"><img alt="" src="assets/img/naiwa-belly-laugh.gif"><b>抽象版</b><small>奶蛙缝合版：梗小怪、魔性音效、捧腹大笑和肥嘟嘟大招，越玩越上头</small></button>
+</div><p class="note">两个版本的地图和玩法不一样，随时能回来换</p></div>
 <div id="shop" class="hide" data-ui><div class="inner"><h2>后台</h2><p class="have"></p><div class="items"></div><p class="note">每次演出（就算倒下了）观众都会扔玫瑰。莎士比亚把剧本翻回第一天，可你买到的本事会一直留着。</p><div class="btns"><button class="b-back">回到前台</button></div></div></div>
 <div id="poster" class="hide" data-ui><img alt=""><p>长按图片保存，发给朋友看看你的版本</p><div class="btns"><button class="b-back">好</button></div></div>
 <div id="wxguide" class="hide" data-ui><div class="arrow">↗</div><h2>想全屏玩？</h2><p>点右上角 <b>···</b> → 选 <b>在浏览器打开</b><br>在 Safari 里点 <b>分享 → 添加到主屏幕</b>，从桌面图标进就是全屏</p><div class="btns"><button class="b-ok">先在微信里玩</button></div></div>
@@ -1419,6 +1443,7 @@ function beginAct(n, retry) {
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.15);   // 每一幕开头只回一点血
   actTime = 0; lineIdx = 0; birdWaves = 0; spawnAcc = 0; saidLow = false;
+  waveN = 0; waveT = 0; lastWave = false;
   clearChests(); clearBreakables(); revived = false; laughT = 0; laughGif.classList.add('hide'); player.dashT = 0; dodgeCd = 0; eliteT = 0; casting = 0; player.conf = 0; shakeIdx = 0; inkT = 0; trailReset(); CO.n = 0; rerolls = 1; fate = { ...FATE0 }; dda = 1;
   if (!retry) setTimeout(chooseFate, 1600);
   if (!retry) for (let k = F.n; k < save.perm.fans * 2; k++) addFan(k % 2 ? T.drum : T.lute);   // 后台买的：开场就带几个伴舞
@@ -1431,7 +1456,7 @@ function beginAct(n, retry) {
   setAct(n);
   camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
-  show($('#bars')); show($('#actinfo')); show($('#tools')); crowd.classList.toggle('hide', n === 5); ultEl.classList.remove('hide');   // 海岛是白天的户外，不放观众剪影（看着像黑边）
+  show($('#bars')); show($('#actinfo')); show($('#tools')); crowd.classList.toggle('hide', n === 5); ultEl.classList.remove('hide'); fduEl.classList.remove('hide');   // 海岛是白天的户外，不放观众剪影（看着像黑边）
   $('#actinfo .goal').textContent = ACTS[n].goal; $('#actinfo .day').textContent = ACTS[n].day; at0().textContent = ACTS[n].day;
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; at.querySelector('small').textContent = ACTS[n].goal; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
   setTimeout(() => show(at, false), 3400);
@@ -1466,7 +1491,7 @@ async function endAct(good) {
   if (hero) { player.aimX = 0.45; player.aimZ = -0.9; }
   await sleep(AUTO ? 50 : 1400);
   flushOrbs();
-  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false); crowd.classList.add('hide'); ultEl.classList.add('hide');
+  show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false); crowd.classList.add('hide'); ultEl.classList.add('hide'); fduEl.classList.add('hide');
   await playScene(SCENES[act === 5 ? 'tpEnd' : `act${act}End`]);
   phase = 'card';
   stage.classList.add('freeze');
@@ -1505,7 +1530,7 @@ async function tombEnding(good) {
 }
 // 结束画面：标题、一句话、这一局的成绩、按钮
 function endScreen(h1, sub, buttons) {
-  phase = 'over'; crowd.classList.add('hide'); ultEl.classList.add('hide');
+  phase = 'over'; crowd.classList.add('hide'); ultEl.classList.add('hide'); fduEl.classList.add('hide');
   recordBest(kills, level);
   const el = $('#over');
   el.querySelector('h1').textContent = h1;
@@ -1623,7 +1648,7 @@ function step(dt) {
   }
 
   director(dt);
-  if (fighting) { stepElites(dt); stepShakespeare(dt); stepHazards(dt); stepFans(dt); stepDDA(dt); stepBreakables(dt); stepLaugh(dt); if (dodgeCd > 0) dodgeCd -= dt; ultCharge += dt * 0.35; updUlt(); if (phase !== 'fight') return; }
+  if (fighting) { stepWaves(dt); stepElites(dt); stepShakespeare(dt); stepHazards(dt); stepFans(dt); stepDDA(dt); stepBreakables(dt); stepLaugh(dt); if (dodgeCd > 0) dodgeCd -= dt; ultCharge += dt * (player.hp < maxHp() * 0.4 ? 1.6 : 0.5) * (laughT > 0 ? 0 : 1); fduCharge += dt * (laughT > 0 ? 0 : 1); updUlt(); if (phase !== 'fight') return; }   // 血少时大招攒得快，好翻盘
   stepCorpses(dt); stepQuills(dt);
   stepChests();
 
@@ -1719,7 +1744,7 @@ function step(dt) {
   if (!fighting) { stepFx(dt); return; }
 
   // 瞄准（10-31 第 55 轮）：朝走路的方向唱，停下来就朝最后走的方向；音符会拐弯追上前面的怪（shoot 里找目标、飞的时候转向）
-  const aim = { x: player.mvx, z: player.mvz };
+  const aim = input.aim.active ? { x: input.aim.x, z: input.aim.y } : { x: player.mvx, z: player.mvz };   // 右摇杆在推就朝右摇杆，不然朝走路的方向
   { const d = Math.hypot(aim.x, aim.z) || 1; aim.x /= d; aim.z /= d; }
   player.aimX = aim.x; player.aimZ = aim.z;
 
@@ -1877,7 +1902,7 @@ function stepFx(dt) {
 async function openLevelUp() {
   phase = 'levelup';
   slowmo = 0.35;
-  sfxLevel();
+  sfxLevel(); heroLine();
   await sleep(AUTO ? 10 : 380);
   slowmo = 0;
   if (!firstLevelSaid) { firstLevelSaid = true; bark(EVENT_LINES.firstLevel.who, EVENT_LINES.firstLevel.text); }
@@ -2028,6 +2053,24 @@ function stepShakespeare(dt) {
     }
   }
 }
+// 怪潮：每 14 秒一波，从四面八方围上来（一整圈），一波比一波多、比一波硬；最后 8 秒是最大的一波
+let waveN = 0, waveT = 0, lastWave = false;
+function stepWaves(dt) {
+  waveT += dt;
+  const first = act === 1 ? 12 : 6;
+  if (actTime < first) return;
+  const last = !lastWave && actTime > ACT_LEN - 8 && act !== 4;
+  if (waveT < 14 && !last) return;
+  waveT = 0; if (last) lastWave = true; waveN++;
+  const n = Math.min(70, Math.round((10 + waveN * 6 + act * 3) * (last ? 1.6 : 1) * dda));
+  const ty = act === 4 ? T.shade : act === 5 ? (waveN % 2 ? T.shade : T.lute) : waveN % 3 === 2 ? T.birdhead : waveN % 3 === 1 ? T.drum : T.lute;
+  for (let k = 0; k < n; k++) spawnEnemy(k % 4 === 3 && act > 1 ? T.drum : ty, k / n * Math.PI * 2 + Math.random() * 0.1, 14 + Math.random() * 2);
+  showBanner(last ? '最后一波！' : `第 ${waveN} 波 · 四面八方来了！`);
+  [0, 3, 7].forEach((n2, j) => tone(nt(n2 - 12), { t0: j * 0.12, dur: 0.4, vol: 0.06, type: 'sawtooth' })); burst({ t0: 0.36, dur: 0.5, vol: 0.05, freq: 300, type: 'lowpass' });
+}
+function showBanner(text) {
+  const el = document.createElement('div'); el.className = 'cheer wave'; el.textContent = text; fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600);
+}
 let eliteT = 0;
 function stepElites(dt) {   // 每 22 秒来一只精英怪（这一幕的普通怪，血多 6 倍、个头大、金色、头上有冠），打倒掉宝箱
   eliteT += dt;
@@ -2068,10 +2111,10 @@ let dda = 1, ddaT = 0;
 function stepDDA(dt) {
   ddaT += dt; if (ddaT < 1) return; ddaT = 0;
   const r = player.hp / maxHp();
-  if (r > 0.7) dda = Math.min(1.4, dda + 0.025); else if (r < 0.35) dda = Math.max(0.55, dda - 0.07); else dda += (1 - dda) * 0.03;
+  if (r > 0.7) dda = Math.min(1.45, dda + 0.03); else if (r < 0.3) dda = Math.max(0.75, dda - 0.05); else dda += (1 - dda) * 0.02;
 }
-const ddaK = () => dda * fate.count * (lowHp() ? 0.85 : 1);
-const ddaDmg = () => 0.65 + 0.35 * dda;
+const ddaK = () => dda * fate.count * (lowHp() ? 0.9 : 1);
+const ddaDmg = () => (0.75 + 0.35 * dda) * (1 + waveN * 0.1) * (act === 1 && actTime < 15 ? 0.5 : 1);   // 前几波打得轻，后面越来越疼
 
 // ---------- 可以打碎的烛台、木桶、花瓶：打碎了掉面包（回血）、情书（全场的萤火飞过来）、鲁特琴（全场大合唱） ----------
 const BR = [], PK = [];
@@ -2148,15 +2191,16 @@ function stepRoses(dt) {
 
 // 被打动的怪不是直接消失：被唱得飞上天，转着圈，落下之前变成一颗心（3D 才有的爽）
 const MAX_C = 120;
-const CO = { n: 0, ty: new Uint8Array(MAX_C), x: new Float32Array(MAX_C), y: new Float32Array(MAX_C), z: new Float32Array(MAX_C), vx: new Float32Array(MAX_C), vy: new Float32Array(MAX_C), vz: new Float32Array(MAX_C), sp: new Float32Array(MAX_C), t: new Float32Array(MAX_C) };
+const CO = { n: 0, bl: new Uint8Array(MAX_C), ty: new Uint8Array(MAX_C), x: new Float32Array(MAX_C), y: new Float32Array(MAX_C), z: new Float32Array(MAX_C), vx: new Float32Array(MAX_C), vy: new Float32Array(MAX_C), vz: new Float32Array(MAX_C), sp: new Float32Array(MAX_C), t: new Float32Array(MAX_C) };
 function launchCorpse(i, t) {
   if (CO.n >= MAX_C || !monFrames[E.type[i]] || t.boss) return;
   const k = CO.n++, dx = E.x[i] - player.x, dz = E.z[i] - player.z, d = Math.hypot(dx, dz) || 1;
   CO.ty[k] = E.type[i]; CO.x[k] = E.x[i]; CO.y[k] = 0; CO.z[k] = E.z[i];
   CO.vx[k] = dx / d * (2 + Math.random() * 3); CO.vz[k] = dz / d * (2 + Math.random() * 3); CO.vy[k] = 7 + Math.random() * 4; CO.sp[k] = (Math.random() - 0.5) * 20; CO.t[k] = 0;
   // 每种怪倒下的样子不一样（学队友版"按各自的梗飞走"，收着点）：鼓怪像皮球弹两下，鸟嘴面具扑腾着往远处飞，号角像螺旋桨转着升天，亡魂打着旋慢慢散掉
-  const key = t.key;
-  if (key === 'drum') { CO.vy[k] = 5.5; CO.vx[k] *= 0.6; CO.vz[k] *= 0.6; CO.sp[k] = 2; }
+  const key = CO_BALLOON ? 'balloon' : t.key; CO.bl[k] = CO_BALLOON ? 1 : 0;
+  if (key === 'balloon') { CO.vy[k] = 2.5 + Math.random(); CO.vx[k] *= 0.15; CO.vz[k] *= 0.15; CO.sp[k] = 0.3; CO.t[k] = -Math.random() * 0.8; }
+  else if (key === 'drum') { CO.vy[k] = 5.5; CO.vx[k] *= 0.6; CO.vz[k] *= 0.6; CO.sp[k] = 2; }
   else if (key === 'birdhead') { CO.vy[k] = 5; CO.vx[k] = dx / d * 7; CO.vz[k] = dz / d * 7; CO.sp[k] = 1; }
   else if (key === 'horn') { CO.vy[k] = 9; CO.vx[k] *= 0.3; CO.vz[k] *= 0.3; CO.sp[k] = 0.1; }
   else if (key === 'shade') { CO.vy[k] = 2.2; CO.vx[k] *= 0.2; CO.vz[k] *= 0.2; CO.sp[k] = 0.05; }
@@ -2165,22 +2209,22 @@ function launchCorpse(i, t) {
 const qC = new THREE.Quaternion(), eC = new THREE.Euler(), mC = new THREE.Matrix4(), pC = new THREE.Vector3(), sC = new THREE.Vector3();
 function stepCorpses(dt) {
   for (let k = CO.n - 1; k >= 0; k--) {
-    const ky = TYPES[CO.ty[k]].key, g = ky === 'shade' ? 0 : ky === 'birdhead' ? 9 : ky === 'horn' ? 6 : 22;
+    const ky = CO.bl[k] ? 'balloon' : TYPES[CO.ty[k]].key, g = ky === 'balloon' || ky === 'shade' ? 0 : ky === 'birdhead' ? 9 : ky === 'horn' ? 6 : 22;
     CO.t[k] += dt; CO.vy[k] -= g * dt; CO.x[k] += CO.vx[k] * dt; CO.y[k] += CO.vy[k] * dt; CO.z[k] += CO.vz[k] * dt;
     if (ky === 'drum' && CO.y[k] < 0 && CO.t[k] < 0.85) { CO.y[k] = 0; CO.vy[k] = Math.abs(CO.vy[k]) * 0.55; }   // 鼓怪弹起来
     if (ky === 'birdhead') CO.y[k] += Math.sin(CO.t[k] * 30) * 0.03;   // 扑腾
-    if (CO.t[k] > 0.9 || CO.y[k] < -0.5) { if (CO.t[k] > 0.9) ring(CO.x[k], CO.z[k], 0.5, 0.25); CO.n--; for (const a of [CO.ty, CO.x, CO.y, CO.z, CO.vx, CO.vy, CO.vz, CO.sp, CO.t]) a[k] = a[CO.n]; }
+    if (CO.t[k] > (CO.bl[k] ? 1.8 : 0.9) || CO.y[k] < -0.5) { if (CO.t[k] > 0.9) { ring(CO.x[k], CO.z[k], 0.5, 0.25); if (CO.bl[k]) { tone(900 + Math.random() * 400, { dur: 0.06, vol: 0.04, to: 300 }); burst({ dur: 0.05, vol: 0.03, freq: 3000 }); } } CO.n--; for (const a of [CO.bl, CO.ty, CO.x, CO.y, CO.z, CO.vx, CO.vy, CO.vz, CO.sp, CO.t]) a[k] = a[CO.n]; }
   }
 }
 function drawCorpses() {   // 画在怪的实例化网格里（第 0 帧姿势），整个身子打转、越飞越小
   for (let k = 0; k < CO.n; k++) {
     const mf = monFrames[CO.ty[k]]; if (!mf) continue;
     const fm = mf.meshes[0], key = CO.ty[k] * 8, k2 = fcounts[key]++;
-    const sc = 1 - CO.t[k] * 0.6;
-    const ky = TYPES[CO.ty[k]].key, spinY = ky === 'horn' ? 40 : ky === 'shade' ? 18 : ky === 'drum' ? 2 : 6;
+    const sc = CO.bl[k] ? 1 + Math.max(0, CO.t[k]) * 0.5 : 1 - CO.t[k] * 0.6;
+    const ky = CO.bl[k] ? 'balloon' : TYPES[CO.ty[k]].key, spinY = ky === 'balloon' ? 1 : ky === 'horn' ? 40 : ky === 'shade' ? 18 : ky === 'drum' ? 2 : 6;
     eC.set(CO.t[k] * CO.sp[k], CO.t[k] * spinY, CO.t[k] * CO.sp[k] * 0.7 + (ky === 'birdhead' ? Math.sin(CO.t[k] * 30) * 0.4 : 0)); qC.setFromEuler(eC);
     mC.compose(pC.set(CO.x[k], CO.y[k], CO.z[k]), qC, sC.set(sc, sc, sc)); mC.toArray(fm.instanceMatrix.array, k2 * 16);
-    const col = fm.instanceColor.array; col[k2 * 3] = 2.2; col[k2 * 3 + 1] = 1.6; col[k2 * 3 + 2] = 1.9;
+    const col = fm.instanceColor.array; if (CO.bl[k]) { col[k2 * 3] = 2.6; col[k2 * 3 + 1] = 1.1; col[k2 * 3 + 2] = 1.8; } else { col[k2 * 3] = 2.2; col[k2 * 3 + 1] = 1.6; col[k2 * 3 + 2] = 1.9; }
   }
 }
 
@@ -2225,7 +2269,7 @@ function stepQuills(dt) {
 // 故事上：莎士比亚最怕笑声，奶娃一笑，悲剧就演不下去。打动怪攒能量，攒满按右下角的按钮：
 // 奶娃变成大奶蛙前仰后合，3 秒里 5 圈全屏声波，这时不掉血。每一幕还有一次"倒下时笑着站起来"（回一半血）。
 let frog = null, laughT = 0, ultCharge = 0, revived = false, laughAudio = null;
-const ULT_NEED = 40;
+const ULT_NEED = 26;
 async function loadFrog() {
   const g = await getGLB('assets/models/bigfrog.glb'), model = g.scene;
   model.updateMatrixWorld(true);
@@ -2239,18 +2283,40 @@ async function loadFrog() {
   frog = { group, inner, bones };
 }
 const ultEl = document.createElement('button'); ultEl.id = 'ult'; ultEl.className = 'hide'; ultEl.innerHTML = '<i></i><b>大笑</b>'; stage.appendChild(ultEl);
-ultEl.addEventListener('click', (e) => { e.stopPropagation(); if (ultCharge >= ULT_NEED && phase === 'fight' && laughT <= 0) { ultCharge = 0; startLaugh(false); } });
+const ultFire = (e) => { e.stopPropagation(); e.preventDefault(); if (ultCharge >= ULT_NEED && phase === 'fight' && laughT <= 0) { ultCharge = 0; startLaugh(false); } };
+ultEl.addEventListener('pointerdown', ultFire); ultEl.addEventListener('click', (e) => e.stopPropagation());
 ultEl.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
+// 第二个技能「肥嘟嘟」（队友版的）：攒满后按，画面里的小怪全被吹成粉色气球飘上天、一个个啵地爆掉
+let fduCharge = 0; const FDU_NEED = 22;
+const fduEl = document.createElement('button'); fduEl.id = 'fdu'; fduEl.className = 'hide'; fduEl.innerHTML = '<i></i><b>🦘</b>'; stage.appendChild(fduEl);
+fduEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); if (fduCharge >= FDU_NEED && phase === 'fight' && laughT <= 0) { fduCharge = 0; feidudu(); } });
+fduEl.addEventListener('click', (e) => e.stopPropagation()); fduEl.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 function updUlt() {
   const f = Math.min(1, ultCharge / ULT_NEED);
   ultEl.style.setProperty('--f', f); ultEl.classList.toggle('ready', f >= 1 && laughT <= 0);
+  const g = Math.min(1, fduCharge / FDU_NEED); fduEl.style.setProperty('--f', g); fduEl.classList.toggle('ready', g >= 1 && laughT <= 0);
+  if (g >= 1 && !fduSaid) { fduSaid = true; floatText(player.x, player.z, '🦘 肥嘟嘟攒满了！'); }
 }
+let fduSaid = false;
+function feidudu() {
+  meme('feidudu', 1, true); showBanner('你的胆子真是肥嘟嘟的！');
+  let n = 0;
+  for (let i = E.n - 1; i >= 0; i--) {
+    const t = TYPES[E.type[i]], dx = E.x[i] - player.x, dz = E.z[i] - player.z;
+    if (t.boss || dx * dx + dz * dz > 15 * 15) continue;
+    balloon.push(E.id[i]); n++;
+  }
+  for (const id of balloon.splice(0)) { const j = idxOf(id); if (j >= 0) { CO_BALLOON = true; killEnemy(j); CO_BALLOON = false; } }
+  shake = Math.max(shake, 0.4); duckT = 3;
+}
+const balloon = []; let CO_BALLOON = false;
 const laughGif = document.createElement('img'); laughGif.id = 'laughgif'; laughGif.className = 'hide'; laughGif.alt = ''; stage.appendChild(laughGif);
 function startLaugh(revive) {
   laughT = 3.2; player.hurtCd = 3.4; shake = Math.max(shake, 0.6);
   laughGif.src = 'assets/img/naiwa-belly-laugh.gif'; laughGif.classList.remove('hide');
   try { if (!muted) { laughAudio = laughAudio || new Audio('assets/audio/naiwa-pet-laugh.wav'); laughAudio.currentTime = 0; laughAudio.volume = 0.9; laughAudio.play().catch(() => {}); setTimeout(() => { if (laughT > 0 && laughAudio) { laughAudio.currentTime = 0; laughAudio.play().catch(() => {}); } }, 1700); } } catch {}
-  duckT = 3.5;
+  duckT = 3.5; memeQuiet = performance.now() + 5500;
+  if (revive) meme('laugh', 0.8, true, 3.2);
   floatText(player.x, player.z, revive ? '笑着站起来了！' : '捧腹大笑！');
   setTimeout(() => { if (phase === 'fight') bark('shakespeare', revive ? '你……你怎么笑着站起来了？！' : '别笑了！这是悲剧！'); }, 600);
   laughWaves = 0;
@@ -2278,7 +2344,7 @@ function drawFrog() {
   if (B.Pelvis) B.Pelvis.rotation.z = B.Pelvis.userData.rz + a * 0.04;
 }
 // 舞步：快踩进红圈、马上要被打中的时候，自动往外滑一步躲开（冷却 5 秒，所以还是要自己躲）
-let dodgeCd = 0, dodgeSaid = false;
+let dodgeCd = 0, dodgeSaid = false, dodgeVoice = 0;
 function tryDodge(k) {
   if (dodgeCd > 0 || player.dashT > 0) return;
   let dx, dz;
@@ -2286,7 +2352,7 @@ function tryDodge(k) {
   else { const ux = Math.sin(HZ.ang[k]), uz = Math.cos(HZ.ang[k]), side = (player.x - HZ.x[k]) * uz - (player.z - HZ.z[k]) * ux; dx = uz * Math.sign(side || 1); dz = -ux * Math.sign(side || 1); }
   const d = Math.hypot(dx, dz) || 1; player.dvx = dx / d * 17; player.dvz = dz / d * 17; player.dashT = 0.17; player.hurtCd = Math.max(player.hurtCd, 0.35); dodgeCd = 5;
   burst({ dur: 0.18, vol: 0.05, freq: 2600, q: 0.6 }); tone(900, { dur: 0.15, vol: 0.03, to: 1800, type: 'triangle' });
-  if (!dodgeSaid) { dodgeSaid = true; floatText(player.x, player.z, '舞步！'); }
+  if (!dodgeSaid || performance.now() > dodgeVoice) { dodgeVoice = performance.now() + 14000; if (meme('dodge', 0.7, true, 0.75)) floatText(player.x, player.z, '闪身步！'); else if (!dodgeSaid) floatText(player.x, player.z, '舞步！'); dodgeSaid = true; }
 }
 
 // ---------- 舞厅的气氛：悬在半空慢慢浮动的蜡烛、飘落的玫瑰花瓣（只在第一幕；按 40 米一格循环，地图还是无限的） ----------
@@ -2657,12 +2723,16 @@ $('#cover').onclick = () => {
   initAudio(); pluck(0, 0.06, 0.6, 'sine'); pluck(4, 0.05, 0.7, 'sine'); pluck(7, 0.05, 0.8, 'sine');
   if (!AUTO) goFullscreen();
   const c = $('#cover'); c.classList.add('leave'); setTimeout(() => { show(c, false); c.classList.remove('leave'); }, 450);
-  refreshTitle(); show($('#title'));
+  show($('#modes'));   // 10-31 第 59 轮：先选版本：经典版（这个游戏）或抽象版（队友的奶蛙缝合版，naiwa/）
+};
+$('#modes .m-classic').onclick = () => {
+  show($('#modes'), false); refreshTitle(); show($('#title'));
   if (IN_WX && !STANDALONE && !sessionStorage.getItem('wxg')) { sessionStorage.setItem('wxg', '1'); show($('#wxguide')); }
 };
+$('#modes .m-abstract').onclick = () => { location.href = 'naiwa/'; };
 { const h = $('#title .fshint'); if (h && h.innerHTML) $('#cover .fshint2').innerHTML = h.innerHTML; }
 function showTitle() {
-  phase = 'title'; resetRun(); setAct(1); crowd.classList.add('hide'); ultEl.classList.add('hide'); ultCharge = 0;
+  phase = 'title'; resetRun(); setAct(1); crowd.classList.add('hide'); ultEl.classList.add('hide'); fduEl.classList.add('hide'); ultCharge = 0;
   show($('#over'), false); show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false); show($('#boss'), false); show($('#calm'), false);
   titleReady = true; refreshTitle(); show($('#title'));
 }
@@ -2689,6 +2759,7 @@ function openShop() {
   show(el);
 }
 $('#title .b-shop').onclick = openShop;
+$('#title .b-modes').onclick = () => { show($('#title'), false); show($('#modes')); };
 $('#shop .b-back').onclick = () => show($('#shop'), false);
 $('#poster .b-back').onclick = () => show($('#poster'), false);
 $('#wxguide .b-ok').onclick = () => show($('#wxguide'), false);
