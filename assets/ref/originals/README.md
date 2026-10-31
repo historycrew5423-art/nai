@@ -11,3 +11,5 @@
 | 2-ford-madox-brown-1870.jpg | 福特·马多克斯·布朗《罗密欧与朱丽叶》，1870 年，美国特拉华艺术博物馆（威尔明顿）藏 | <https://commons.wikimedia.org/wiki/File:Romeo_and_juliet_brown.jpg> |
 | 3-dicksee-1884.jpg | 弗兰克·迪克西《罗密欧与朱丽叶》，1884 年，英国南安普敦市立美术馆藏 | <https://commons.wikimedia.org/wiki/File:Frank_Bernard_Dicksee_-_Romeo_and_Juliet,_1884.jpg> |
 | 4-wright-of-derby-1790.jpg | 德比的赖特《罗密欧与朱丽叶：墓室》，1790 年，英国德比博物馆与美术馆藏 | <https://commons.wikimedia.org/wiki/File:Joseph_Wright_of_Derby._Romeo_and_Juliet._The_Tomb_Scene._exhibited_1790_and_1791.jpg> |
+| 5-millais-1850.jpg | 约翰·埃弗里特·米莱斯《费迪南被爱丽儿引诱》，1849–1850 年（第二部《暴风雨》用） | <https://commons.wikimedia.org/wiki/File:Millais_ferdy.jpg> |
+| 6-waterhouse-1916.jpg | 约翰·威廉·沃特豪斯《米兰达——暴风雨》，1916 年（第二部《暴风雨》用） | <https://commons.wikimedia.org/wiki/File:Miranda_-_The_Tempest_JWW.jpg> |
