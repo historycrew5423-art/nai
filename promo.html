@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>莎士比亚的两场戏 · 30 秒宣传片</title>
+<style>
+/* 30 秒宣传片：点一下开始（有音乐），用电脑录屏（Mac：Cmd+Shift+5）就能得到视频。16:9，铺满窗口 */
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Songti SC","STSong","Noto Serif SC",serif}
+#v{position:absolute;left:50%;top:50%;width:min(100vw,177.78vh);height:min(56.25vw,100vh);transform:translate(-50%,-50%);overflow:hidden;background:#0c0a10}
+.s{position:absolute;inset:0;opacity:0}
+.s img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.s.contain img{object-fit:contain;background:#0c0a10}
+.s.on{animation:fade var(--d) linear forwards}
+.s.on img{animation:kb var(--d) ease-out forwards}
+@keyframes fade{0%{opacity:0}8%{opacity:1}92%{opacity:1}100%{opacity:0}}
+@keyframes kb{from{transform:scale(1.02)}to{transform:scale(1.12) translate(-1.5%,-1%)}}
+.s::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(8,6,12,.82),rgba(8,6,12,0) 45%)}
+.cap{position:absolute;left:0;right:0;bottom:8%;z-index:2;text-align:center;color:#fff3d8;font-weight:900;font-size:5.2vmin;letter-spacing:.12em;text-shadow:0 0 2vmin rgba(255,160,60,.8),0 .4vmin .8vmin #000;opacity:0}
+.s.on .cap{animation:capin var(--d) ease-out forwards}
+.cap small{display:block;font-size:2.8vmin;font-weight:normal;color:#ffd98a;letter-spacing:.2em;margin-top:1vmin}
+@keyframes capin{0%{opacity:0;transform:translateY(3vmin)}12%{opacity:1;transform:none}88%{opacity:1}100%{opacity:0}}
+.title .cap{bottom:auto;top:30%;font-size:11vmin}
+.end .cap{bottom:auto;top:34%;font-size:8vmin}
+#start{position:absolute;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;color:#ffd98a;font-size:5vmin;background:rgba(0,0,0,.6);cursor:pointer}
+</style></head><body>
+<div id="v">
+ <div class="s title"><img src="assets/cg/key-rj.jpg"><div class="cap">莎士比亚的两场戏<small>一首情歌，改写两个结局</small></div></div>
+ <div class="s"><img src="assets/cg/rj-01-feud.jpg"><div class="cap">莎士比亚写好了悲剧<small>两个相爱的孩子，五天后都会死</small></div></div>
+ <div class="s"><img src="docs/images/submit/2-第一幕舞会.jpg"><div class="cap">你来演奶娃罗密欧<small>仇恨化作怪物，用歌声打动它们</small></div></div>
+ <div class="s"><img src="docs/images/submit/4-命运卡.jpg"><div class="cap">唱法 × 心情 × 命运卡<small>每一局都不一样</small></div></div>
+ <div class="s"><img src="docs/images/submit/5-大招捧腹大笑.jpg"><div class="cap">捧腹大笑！<small>全屏声波，莎士比亚气坏了</small></div></div>
+ <div class="s"><img src="assets/cg/rj-05-balcony.jpg"><div class="cap">改写结局<small>罗密欧啊罗密欧……</small></div></div>
+ <div class="s"><img src="docs/images/submit/3-第二部海岛.jpg"><div class="cap">第二部 · 暴风雨<small>漂到莎士比亚的魔法海岛</small></div></div>
+ <div class="s contain"><img src="docs/images/submit/1-选版本.jpg"><div class="cap">经典版 · 抽象版<small>两种玩法，随你挑</small></div></div>
+ <div class="s end"><img src="assets/cg/key-tp.jpg"><div class="cap">扫码就玩<small>手机横屏竖屏 · 不用下载</small></div></div>
+</div>
+<div id="start">点一下开始播放（30 秒，带音乐）</div>
+<script>
+const S = [...document.querySelectorAll('.s')], D = [3.6, 3.2, 3.6, 3.2, 3.4, 3, 3.6, 3.2, 4.2];   // 合计 31 秒左右，最后一张停住
+function play() {
+  document.getElementById('start').remove();
+  music();
+  let t = 0;
+  S.forEach((s, i) => { setTimeout(() => { s.style.setProperty('--d', D[i] + (i === S.length - 1 ? 30 : 0.4) + 's'); s.classList.add('on'); }, t * 1000); t += D[i]; });
+}
+// 背景音乐：G 大调 I–vi–IV–V，垫底和弦 + 分解和弦 + 鼓点，92 拍每分钟
+function music() {
+  const a = new (window.AudioContext || window.webkitAudioContext)(), spb = 60 / 92 / 2, t0 = a.currentTime + 0.1;
+  const P = [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], f = (n) => 196 * Math.pow(2, n / 12);
+  const tone = (fr, t, d, v, type = 'triangle') => { const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = fr; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + 0.05); };
+  for (let st = 0; st < 31 / spb; st++) {
+    const bar = Math.floor(st / 8) % 4, beat = st % 8, ch = P[bar], t = t0 + st * spb, big = st >= 16;
+    if (beat === 0) ch.forEach((n) => tone(f(n), t, spb * 8, 0.03, 'sine'));
+    if (beat === 0 || beat === 4 || (big && beat === 6)) tone(f(ch[0]) / 2, t, spb * 2.5, 0.09);
+    tone(f(ch[[0, 1, 2, 1, 0, 1, 2, 1][beat]]) * 2, t, spb * 1.4, big ? 0.04 : 0.03);
+    if (big && (beat === 0 || beat === 4)) tone(110, t, 0.12, 0.12, 'sine');
+  }
+  [0, 4, 7, 12, 16].forEach((n, k) => tone(f(n) * 2, t0 + 28 + k * 0.08, 1.2, 0.05));   // 结尾的扫弦
+}
+document.getElementById('start').onclick = play;
+if (location.search.includes('auto')) play();
+</script>
+</body></html>
