@@ -467,6 +467,44 @@ async function loadModel(name, height) {
   inner.add(obj); wrap.add(inner); wrap.userData.inner = inner;
   return wrap;
 }
+// 绑了骨骼、带动作的角色（Tripo 自动绑骨加动作，assets/models/anim/）。
+// Tripo 的走路和跑步动作把髋部整体挪开了一米多（"原地播放"留下的偏移），这里把髋部的位置轨道平移回站立时的位置，只留上下起伏。
+function fixHip(clip, ref) {
+  for (const tr of clip.tracks) {
+    if (!/Hip\.position$/.test(tr.name)) continue;
+    const v = tr.values, n = v.length / 3; let mx = 0, my = 0, mz = 0;
+    for (let i = 0; i < n; i++) { mx += v[i * 3]; my += v[i * 3 + 1]; mz += v[i * 3 + 2]; }
+    mx /= n; my /= n; mz /= n;
+    for (let i = 0; i < n; i++) { v[i * 3] += ref[0] - mx; v[i * 3 + 1] += ref[1] - my; v[i * 3 + 2] += ref[2] - mz; }
+  }
+}
+async function loadAnimated(name, height) {
+  const g = await loader.loadAsync(`assets/models/anim/${name}.glb`);
+  const obj = g.scene;
+  obj.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });   // 蒙皮网格按绑定姿势算包围球，动起来会被误裁掉
+  const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const s = height / size.y;
+  obj.scale.setScalar(s); obj.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+  const wrap = new THREE.Group(), inner = new THREE.Group();
+  inner.add(obj); wrap.add(inner);
+  const idle = g.animations.find((a) => a.name === 'idle');
+  const hipTrack = idle && idle.tracks.find((t) => /Hip\.position$/.test(t.name));
+  const ref = hipTrack ? [hipTrack.values[0], hipTrack.values[1], hipTrack.values[2]] : [0, 0, 0];
+  const mixer = new THREE.AnimationMixer(obj), actions = {};
+  for (const clip of g.animations) { fixHip(clip, ref); actions[clip.name] = mixer.clipAction(clip); }
+  Object.assign(wrap.userData, { inner, mixer, actions, cur: null });
+  return wrap;
+}
+// 切换动作：淡入新的、淡出旧的。once = 只播一次，停在最后一帧（比如茂丘西奥倒下）
+function playAnim(w, name, { fade = 0.22, once = false, speed = 1 } = {}) {
+  const u = w && w.userData; if (!u || !u.actions || !u.actions[name]) return;
+  const a = u.actions[name]; a.timeScale = speed;
+  if (u.cur === name) return;
+  a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once;
+  a.fadeIn(fade).play();
+  if (u.cur && u.actions[u.cur]) u.actions[u.cur].fadeOut(fade);
+  u.cur = name;
+}
 let hero = null, juliet = null, tybalt = null, mercutio = null;
 
 // ---------- 数据 ----------
@@ -482,7 +520,7 @@ const B = { n: 0, x: new Float32Array(MAX_B), z: new Float32Array(MAX_B), dx: ne
 const O = { n: 0, x: new Float32Array(MAX_O), z: new Float32Array(MAX_O), v: new Float32Array(MAX_O), t: new Float32Array(MAX_O) };
 let nextId = 1;
 
-const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, moving: 0 };   // aimZ = 1：开打前面朝镜头
+const player = { x: 0, z: 0, r: 0.45, hp: 100, hurtCd: 0, aimX: 0, aimZ: 1, moving: 0, mvx: 0, mvz: 1 };   // aimZ = 1：开打前面朝镜头
 let stats = baseStats(), levels = {}, level = 1, xp = 0, kills = 0, pendingLevels = 0;
 let time = 0, actTime = 0, fireCd = 0, drumCd = 0, slowmo = 0, noteIdx = 0, act = 1, snapshot = null;
 let calmHit = 0, dogSpawned = false, dogDown = false, bossCharge = 0, bossChargeCd = 4, calm = 100, mercFell = false, tybaltHalfSaid = false;
@@ -916,6 +954,7 @@ function step(dt) {
     pushOut(player, player.r);
   }
   player.moving = canMove && phase !== 'title' ? Math.hypot(mv.x, mv.y) : 0;
+  if (player.moving > 0.1) { player.mvx = mv.x; player.mvz = mv.y; }
   updateTiles(player.x, player.z);
 
   if (fighting) {
@@ -941,11 +980,12 @@ function step(dt) {
       if (bossChargeCd <= 0) { bossChargeCd = 5; bossCharge = 0.8; }
     }
   }
-  if (act === 1 && tybalt && tybalt.visible) {   // 第一幕：提伯尔特在场边露面
+  if (act === 1 && tybalt && tybalt.visible) {   // 第一幕：提伯尔特在场边露面，站着盯一会儿再走开
     tybalt.userData.t += dt;
     tybalt.rotation.y = Math.atan2(player.x - tybalt.position.x, player.z - tybalt.position.z);
-    if (tybalt.userData.t > 5) { tybalt.position.x -= dt * 4; tybalt.rotation.y = -Math.PI / 2; }
-    if (tybalt.userData.t > 8) tybalt.visible = false;
+    playAnim(tybalt, tybalt.userData.t > 5 ? 'walk' : 'idle');
+    if (tybalt.userData.t > 5) { tybalt.position.x -= dt * 2.2; tybalt.rotation.y = -Math.PI / 2; }
+    if (tybalt.userData.t > 9) tybalt.visible = false;
   }
 
   director(dt);
@@ -1140,6 +1180,7 @@ async function openLevelUp() {
     pendingLevels--;
     await chooseCards(`升到 ${level - pendingLevels} 级！选一首新歌`, false);
     shockwave(5.5, 3);
+    if (hero) { playAnim(hero, 'jump', { once: true, fade: 0.1, speed: 1.3 }); hero.userData.jumpT = 1.6; }
   }
   if (phase === 'levelup') phase = 'fight';
 }
@@ -1161,11 +1202,12 @@ function draw(dt) {
   for (let i = 0; i < E.n; i++) {
     const ty = E.type[i], t = TYPES[ty], m = enemyMeshes[ty], k = counts[ty]++;
     if (!m) {   // 提伯尔特：3D 模型
-      if (tybalt) {
+      if (tybalt) {   // 提伯尔特：冲刺时跑，平时走，贴近罗密欧时挥剑
         tybalt.visible = true; tybalt.position.set(E.x[i], 0, E.z[i]);
         tybalt.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]);
-        const inner = tybalt.userData.inner; inner.position.y = Math.abs(Math.sin(time * 7)) * 0.12; inner.rotation.z = Math.sin(time * 7) * 0.05;
-        inner.scale.setScalar(E.flash[i] > 0 ? 1.06 : 1);
+        const near = Math.hypot(player.x - E.x[i], player.z - E.z[i]) < 2.6;
+        playAnim(tybalt, near ? 'slash' : bossCharge > 0 ? 'run' : 'walk', { speed: near ? 1.6 : 1 });
+        tybalt.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : 1);
       }
       writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
       continue;
@@ -1179,6 +1221,7 @@ function draw(dt) {
     writeMatrix(sm, i, E.x[i], 0.012, E.z[i], ss, 1, ss * 0.7);
   }
   if (tybalt && act === 3 && !(dogSpawned && !dogDown) && tybalt.visible) tybalt.visible = false;
+  if (tybalt && tybalt.visible) tybalt.userData.mixer.update(dt);
   enemyMeshes.forEach((m, ty) => { if (!m) return; m.count = counts[ty]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
   shadowMesh.count = E.n; shadowMesh.instanceMatrix.needsUpdate = true;
 
@@ -1201,28 +1244,28 @@ function draw(dt) {
   fireflyMesh.count = O.n; fireflyMesh.instanceMatrix.needsUpdate = true;
 
   // 主角：用代码做的动作。走路一蹦一蹦、左右摇，站着时轻轻呼吸
-  if (hero) {
-    const inner = hero.userData.inner, mv = player.moving;
-    const hop = Math.abs(Math.sin(time * 11));
-    hero.position.set(player.x, mv > 0.1 ? hop * 0.14 : 0, player.z);
-    const want = Math.atan2(player.aimX, player.aimZ);
+  if (hero) {   // 罗密欧：跑的时候播跑步、面朝跑的方向；站着时播站立、面朝唱歌的方向
+    const mv = player.moving > 0.1;
+    hero.position.set(player.x, 0, player.z);
+    const want = mv ? Math.atan2(player.mvx, player.mvz) : Math.atan2(player.aimX, player.aimZ);
     let dr = want - hero.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-    hero.rotation.y += dr * Math.min(1, dt * 14);
-    inner.rotation.z = mv > 0.1 ? Math.sin(time * 11) * 0.07 : 0;
-    inner.rotation.x = mv > 0.1 ? 0.08 : 0;
-    const breathe = 1 + Math.sin(time * 2.4) * 0.015;
-    inner.scale.set(1 + (mv > 0.1 ? (1 - hop) * 0.04 : 0), breathe - (mv > 0.1 ? (1 - hop) * 0.05 : 0), 1);
+    hero.rotation.y += dr * Math.min(1, dt * 12);
+    if (hero.userData.jumpT > 0) hero.userData.jumpT -= dt;
+    else playAnim(hero, mv ? 'run' : 'idle', { speed: mv ? 1.05 : 1 });
+    hero.userData.mixer.update(dt);
     hero.visible = !(player.hurtCd > 0.25 && Math.floor(time * 20) % 2);
   }
   if (juliet && juliet.visible && !juliet.userData.lying) { juliet.userData.inner.position.y = 0.06 + Math.sin(time * 1.8) * 0.04; }
-  if (mercutio && mercutio.visible) {   // 第三幕：茂丘西奥跟在身边，倒下后留在原地
-    const inner = mercutio.userData.inner;
+  if (mercutio && mercutio.visible) {   // 第三幕：茂丘西奥跟在身边跑，倒下时播"倒下"并停在最后一帧
     if (!mercFell) {
-      const tx = player.x - 1.7, tz = player.z + 1.1;
-      mercutio.position.x += (tx - mercutio.position.x) * Math.min(1, dt * 4); mercutio.position.z += (tz - mercutio.position.z) * Math.min(1, dt * 4);
-      mercutio.rotation.y = Math.atan2(player.aimX, player.aimZ);
-      inner.position.y = player.moving > 0.1 ? Math.abs(Math.sin(time * 11 + 1)) * 0.12 : 0;
-    } else { inner.rotation.z += (Math.PI / 2 - inner.rotation.z) * Math.min(1, dt * 3); inner.position.y = 0.2; }
+      const tx = player.x - 1.7, tz = player.z + 1.1, ddx = tx - mercutio.position.x, ddz = tz - mercutio.position.z, dd = Math.hypot(ddx, ddz);
+      mercutio.position.x += ddx * Math.min(1, dt * 4); mercutio.position.z += ddz * Math.min(1, dt * 4);
+      const run = dd > 0.25;
+      const want = run ? Math.atan2(ddx, ddz) : Math.atan2(player.aimX, player.aimZ);
+      let dr = want - mercutio.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); mercutio.rotation.y += dr * Math.min(1, dt * 10);
+      playAnim(mercutio, run ? 'run' : 'idle');
+    } else playAnim(mercutio, 'fall', { once: true, fade: 0.15 });
+    mercutio.userData.mixer.update(dt);
   }
   heroLight.position.set(player.x, 2.6, player.z + 1.2);
   heroGlow.position.x = player.x; heroGlow.position.z = player.z;
@@ -1284,7 +1327,7 @@ function goFullscreen() {
 let titleReady = false;
 $('#title').onclick = () => { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); startRun(); };
 
-Promise.all([loadModel('fantasy', 1.9), loadModel('wedding-dress', 1.95), loadModel('minotaur', 2.3), loadModel('rabbit', 1.85)]).then(([h, j, t, m]) => {
+Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95), loadAnimated('tybalt', 2.3), loadAnimated('mercutio', 1.85)]).then(([h, j, t, m]) => {
   hero = h; juliet = j; tybalt = t; mercutio = m;
   scene.add(hero, juliet, tybalt, mercutio);
   juliet.visible = tybalt.visible = mercutio.visible = false;

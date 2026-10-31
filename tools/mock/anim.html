@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>动作预览</title>
+<style>html,body{margin:0;background:#2a2430;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../../vendor/three/three.module.js", "three/addons/": "../../vendor/three/addons/" } }</script>
+</head><body>
+<script type="module">
+// 检查 Tripo 绑骨加动作的结果：一个角色的每个动作取 4 个时间点，排成一张图。?m=romeo|tybalt|mercutio
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const name = new URLSearchParams(location.search).get('m') || 'romeo';
+const W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true);
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2a2430);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x554466, 2.2));
+const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(2, 4, 5); scene.add(key);
+const g = await new GLTFLoader().loadAsync(`../../assets/models/anim/${name}.glb`);
+const obj = g.scene; scene.add(obj);
+const box = new THREE.Box3().setFromObject(obj), h = box.getSize(new THREE.Vector3()).y, cy = box.getCenter(new THREE.Vector3()).y;
+const mixer = new THREE.AnimationMixer(obj);
+const clips = g.animations.slice().sort((a, b) => a.name.localeCompare(b.name));
+const cols = 4, rows = clips.length, cw = W / cols, ch = H / rows;
+const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 100);
+const d = h * 0.75 / Math.tan(THREE.MathUtils.degToRad(15));
+cam.position.set(d * 0.55, cy + h * 0.1, d * 0.85); cam.lookAt(0, cy, 0);
+const info = [];
+clips.forEach((clip, ri) => {
+  const a = mixer.clipAction(clip); mixer.stopAllAction(); a.play();
+  const times = clip.name === 'hurt' || clip.name === 'idle' ? [0.1, 0.4, 0.8, 1.4] : [0, 0.25, 0.5, 0.75].map((f) => f * clip.duration);
+  times.forEach((t, ci) => {
+    a.time = t; mixer.update(0);
+    const x = ci * cw, y = H - (ri + 1) * ch;
+    r.setViewport(x, y, cw, ch); r.setScissor(x, y, cw, ch); r.render(scene, cam);
+  });
+  info.push(`${clip.name} ${clip.duration.toFixed(2)}s`);
+});
+document.title = 'ready ' + info.join(' | ');
+</script>
+</body></html>
