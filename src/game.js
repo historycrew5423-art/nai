@@ -8,7 +8,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Input } from './input.js';
 import { byId, drawCards, baseStats } from './skills.js';
-import { PEOPLE, SCENES, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
+import { PEOPLE, SCENES, CAST, ACT1_LINES, ACT2_LINES, ACT3_LINES, ACT4_LINES, TP_LINES, TP_BOSS, BOSS_LINES, EVENT_LINES, DEATH, LOVE, PAINTINGS } from './dialogue.js';
+import { save, persist, unlock, recordChoice, recordBest, resetSave } from './save.js';
 
 const VERSION = 'v0.2';
 const Q = new URLSearchParams(location.search);
@@ -17,7 +18,7 @@ const TILE = 40;                 // 地块边长（米）
 const ACT_LEN = +Q.get('len') || 45;    // 每一幕打斗时长（秒）；?len=12 给测试用，缩短每一幕
 const START_ACT = +Q.get('act') || 1;   // ?act=2 直接从第二幕开始（测试用）
 const MAX_E = 900, MAX_B = 1600, MAX_O = 1600;
-const CAM = new THREE.Vector3(0, 11, 9.5);          // 镜头在主角上方 11 米、往镜头那侧 9.5 米（往下约 49 度）
+const CAM = new THREE.Vector3(0, 10, 8.6);          // 镜头在主角上方 10 米、往镜头那侧 8.6 米（往下约 49 度）；10-31 拉近一点，模型看得更清楚
 const PITCH = Math.atan2(CAM.y, CAM.z);             // 立牌朝镜头倾斜的角度
 
 // ---------- 画面：固定 16:9 ----------
@@ -166,9 +167,32 @@ function tombFloor() {
   }, true);
 }
 
+// 海岛地面（第二部，照《漂岛奇航》的画风）：米黄色沙滩上一块块鲜绿的草地，几汪碧蓝的浅水，水边一圈白色浪花。四方连续。
+function islandFloor() {
+  return canvasTex(1024, (g, S) => {
+    let seed = 41; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    g.fillStyle = '#ead9a6'; g.fillRect(0, 0, S, S);
+    for (let k = 0; k < 9000; k++) { const v = rnd(); g.fillStyle = v < 0.5 ? 'rgba(255,248,220,.35)' : 'rgba(190,160,110,.25)'; g.fillRect(rnd() * S, rnd() * S, 2, 2); }
+    const blob = (x, y, r, fill, wob = 0.25, n = 14) => {
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        g.beginPath();
+        for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2, rr = r * (1 + Math.sin(a * 3 + x) * wob * 0.5 + Math.cos(a * 5 + y) * wob * 0.5); g.lineTo(x + ox + Math.cos(a) * rr, y + oy + Math.sin(a) * rr); }
+        g.closePath(); g.fill();
+      }
+    };
+    // 浅水：先画浪花圈，再画水
+    const pools = [[S * 0.5, S * 0.5, S * 0.07], [S * 0.12, S * 0.62, S * 0.06], [S * 0.8, S * 0.22, S * 0.05]];
+    for (const [x, y, r] of pools) { g.fillStyle = 'rgba(255,255,255,.85)'; blob(x, y, r * 1.18); g.fillStyle = '#5fd0d8'; blob(x, y, r * 1.05); g.fillStyle = '#3db8cc'; blob(x, y, r * 0.7); }
+    // 草地
+    const grass = [[S * 0.27, S * 0.27, S * 0.17], [S * 0.75, S * 0.72, S * 0.16], [S * 0.22, S * 0.86, S * 0.1], [S * 0.86, S * 0.48, S * 0.09], [S * 0.6, S * 0.1, S * 0.09]];
+    for (const [x, y, r] of grass) { g.fillStyle = '#c9c48a'; blob(x, y, r * 1.08); g.fillStyle = '#67bd45'; blob(x, y, r); }
+    for (let k = 0; k < 2600; k++) { const x = rnd() * S, y = rnd() * S; const p = g.getImageData(x | 0, y | 0, 1, 1).data; if (p[1] > 150 && p[0] < 140) { g.fillStyle = rnd() < 0.5 ? 'rgba(140,215,90,.6)' : 'rgba(60,140,50,.45)'; g.fillRect(x, y, 3, 5); } }
+  }, true);
+}
+
 // ---------- 无限地面 ----------
 const floors = { 1: ballroomFloor() };
-const FLOOR_FN = { 2: gardenFloor, 3: piazzaFloor, 4: tombFloor };
+const FLOOR_FN = { 2: gardenFloor, 3: piazzaFloor, 4: tombFloor, 5: islandFloor };
 const floorTex = floors[1]; floorTex.repeat.set(3, 3);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 3, TILE * 3), new THREE.MeshLambertMaterial({ map: floorTex }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -191,7 +215,11 @@ const ACT4_OBS = [
   { kind: 'coffin', x: -11, z: -11, r: 1.5 }, { kind: 'coffin', x: 11, z: 11, r: 1.5 },
   { kind: 'pillar', x: 11, z: -11, r: 0.8 }, { kind: 'pillar', x: -11, z: 11, r: 0.8 }, { kind: 'pillar', x: -15, z: 0, r: 0.8 }, { kind: 'pillar', x: 15, z: 0, r: 0.8 },
 ];
-const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS };
+const ACT5_OBS = [
+  { kind: 'hill', x: -11, z: -11, r: 3.0 }, { kind: 'palm', x: 11, z: -11, r: 0.6 }, { kind: 'rock', x: 11, z: 11, r: 1.3 },
+  { kind: 'palm', x: -11, z: 11, r: 0.6 }, { kind: 'chest', x: -15, z: 0, r: 0.8 }, { kind: 'palm', x: 15, z: 0, r: 0.6 },
+];
+const OBS = { 1: ACT1_OBS, 2: ACT2_OBS, 3: ACT3_OBS, 4: ACT4_OBS, 5: ACT5_OBS };
 const MAT = {
   hedge: new THREE.MeshLambertMaterial({ color: 0x2b5236 }),
   leaf: new THREE.MeshLambertMaterial({ color: 0x2f5c34 }),
@@ -206,6 +234,13 @@ const MAT = {
   redBanner: new THREE.MeshLambertMaterial({ color: 0xa3283a, emissive: 0x200408, side: THREE.DoubleSide }),
   blueBanner: new THREE.MeshLambertMaterial({ color: 0x2a4a8a, emissive: 0x060a20, side: THREE.DoubleSide }),
   darkStone: new THREE.MeshLambertMaterial({ color: 0x3a3646 }),
+  isleStone: new THREE.MeshLambertMaterial({ color: 0x8e9196 }),
+  isleStone2: new THREE.MeshLambertMaterial({ color: 0x6f7378 }),
+  isleGrass: new THREE.MeshLambertMaterial({ color: 0x6cc44a }),
+  palmTrunk: new THREE.MeshLambertMaterial({ color: 0xa97b4c }),
+  palmLeaf: new THREE.MeshLambertMaterial({ color: 0x3faa4f, side: THREE.DoubleSide }),
+  bushGreen: new THREE.MeshLambertMaterial({ color: 0x4fb04c }),
+  chestWood: new THREE.MeshLambertMaterial({ color: 0xa4602a }),
   cloth: new THREE.MeshLambertMaterial({ color: 0x7a2230 }),
   gold: new THREE.MeshLambertMaterial({ color: 0xd9a441, emissive: 0x3a2508 }),
   stone: new THREE.MeshLambertMaterial({ color: 0x5a5262 }),
@@ -274,6 +309,32 @@ function buildTile(act) {
       put('leaf', new THREE.SphereGeometry(0.85, 12, 8), x, 1.75, z);
       for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28; put('orange', new THREE.SphereGeometry(0.1, 6, 4), x + Math.cos(a) * 0.72, 1.6 + Math.sin(k * 1.7) * 0.35, z + Math.sin(a) * 0.72); }
     }
+    else if (o.kind === 'hill') {   // 一层一层的石头小山，每层顶上是绿的
+      for (const [r, y0, h] of [[3.0, 0, 0.85], [2.3, 0.85, 0.8], [1.55, 1.65, 0.75]]) {
+        put(y0 === 0 ? 'isleStone2' : 'isleStone', new THREE.CylinderGeometry(r * 0.94, r, h, 18), x + y0 * 0.15, y0 + h / 2, z - y0 * 0.1);
+        put('isleGrass', new THREE.CylinderGeometry(r * 0.9, r * 0.94, 0.12, 18), x + y0 * 0.15, y0 + h + 0.03, z - y0 * 0.1);
+      }
+      for (let k = 0; k < 4; k++) put('bushGreen', new THREE.SphereGeometry(0.35, 8, 6).scale(1, 0.75, 1), x + 0.3 + Math.cos(k * 1.7) * 1.0, 2.55, z - 0.2 + Math.sin(k * 1.7) * 1.0);
+    } else if (o.kind === 'palm') {   // 棕榈树：弯弯的树干，一圈垂下来的叶子
+      let px = x, py = 0, lean = 0.12;
+      for (let k = 0; k < 4; k++) { put('palmTrunk', new THREE.CylinderGeometry(0.13 - k * 0.012, 0.17 - k * 0.012, 0.55, 7), px, py + 0.27, z, 0, 0, -lean * k * 0.6); px += lean * 0.6 * k * 0.18; py += 0.53; }
+      for (let k = 0; k < 7; k++) {
+        const a = k / 7 * Math.PI * 2, leaf = new THREE.PlaneGeometry(0.34, 1.25);
+        leaf.translate(0, 0.62, 0); leaf.rotateX(-1.3); leaf.rotateY(a);
+        put('palmLeaf', leaf, px, py + 0.05, z);
+      }
+      for (let k = 0; k < 3; k++) put('palmTrunk', new THREE.SphereGeometry(0.12, 6, 5), px + Math.cos(k * 2.1) * 0.15, py - 0.12, z + Math.sin(k * 2.1) * 0.15);
+    } else if (o.kind === 'rock') {
+      put('isleStone', new THREE.DodecahedronGeometry(1.25, 1).scale(1, 0.7, 1), x, 0.6, z);
+      put('isleGrass', new THREE.SphereGeometry(0.95, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.6).scale(1, 0.5, 1), x, 1.18, z);
+      put('isleStone2', new THREE.DodecahedronGeometry(0.55, 0), x + 1.3, 0.3, z + 0.4);
+    } else if (o.kind === 'chest') {   // 被冲上岸的宝箱和木牌
+      put('chestWood', new THREE.BoxGeometry(1.1, 0.6, 0.7), x, 0.3, z);
+      put('chestWood', new THREE.CylinderGeometry(0.35, 0.35, 1.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), x, 0.6, z);
+      put('gold', new THREE.BoxGeometry(1.14, 0.08, 0.74), x, 0.62, z);
+      put('palmTrunk', new THREE.CylinderGeometry(0.05, 0.06, 1.4, 6), x + 1.2, 0.7, z - 0.6);
+      put('chestWood', new THREE.BoxGeometry(0.8, 0.3, 0.06), x + 1.35, 1.25, z - 0.6, 0, 0, -0.15);
+    }
     else if (o.kind === 'well') {
       put('stone', new THREE.CylinderGeometry(1.25, 1.3, 0.9, 16, 1, true), x, 0.45, z);
       put('stone', new THREE.TorusGeometry(1.25, 0.12, 5, 18), x, 0.9, z, Math.PI / 2);
@@ -320,6 +381,9 @@ function buildTile(act) {
       for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = o.r + 0.8 + Math.random() * 1.2; mask(x + Math.cos(a) * d, z + Math.sin(a) * d); }
     } else if (act === 2) {
       for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28, d = o.r + 0.7 + Math.random() * 1.2; bush(x + Math.cos(a) * d, z + Math.sin(a) * d); }
+    } else if (act === 5) {   // 海岛：障碍物周围长灌木、散几块小石头
+      for (let k = 0; k < 4; k++) { const a = Math.random() * 6.28, d = o.r + 0.8 + Math.random() * 1.6; put('bushGreen', new THREE.SphereGeometry(0.32 + Math.random() * 0.15, 8, 6).scale(1, 0.7, 1), x + Math.cos(a) * d, 0.2, z + Math.sin(a) * d); }
+      for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = o.r + 1 + Math.random() * 1.5; put('isleStone', new THREE.DodecahedronGeometry(0.22, 0), x + Math.cos(a) * d, 0.12, z + Math.sin(a) * d); }
     } else if (act === 3) {
       for (let k = 0; k < 4; k++) { const a = Math.random() * 6.28, d = o.r + 0.6 + Math.random() * 1.4; put(k % 2 ? 'orange' : 'rose', new THREE.SphereGeometry(0.09, 5, 4), x + Math.cos(a) * d, 0.09, z + Math.sin(a) * d); }
     } else {
@@ -365,6 +429,7 @@ const LOOKS = {
   2: { bg: 0x0e1420, hemi: [0x7a92c8, 0x16241f, 1.15], moon: [0xa8c0ff, 1.5] },
   3: { bg: 0x2a1c26, hemi: [0xffc890, 0x3a2a40, 1.05], moon: [0xffa860, 1.9], sun: [-14, 7, 2] },
   4: { bg: 0x09090f, hemi: [0x5a6aa0, 0x10101a, 0.8], moon: [0x7fa0ff, 0.5] },
+  5: { bg: 0x9ad8f2, hemi: [0xe4f6ff, 0x7aa35a, 2.0], moon: [0xfff0d0, 2.4], sun: [-8, 14, 7], day: true },
 };
 function setAct(n) {
   if (tileAct !== n) {
@@ -382,6 +447,7 @@ function setAct(n) {
   hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
   moon.color.setHex(L.moon[0]); moon.intensity = L.moon[1]; moon.position.set(...(L.sun || [-6, 12, -4]));
   bier.visible = n === 4; bierLight.visible = n === 4;
+  ui.classList.toggle('day', !!L.day); ariel.visible = n === 5;
   tileIX = 1e9; updateTiles(player.x, player.z);
 }
 function updateTiles(px, pz) {
@@ -412,8 +478,9 @@ const TYPES = [
   { key: 'horn', h: 1.5, r: 0.45, hp: 3, speed: 2.3, dmg: 6, xp: 2, flip: true, ranged: true },
   { key: 'shade', h: 1.5, r: 0.42, hp: 3, speed: 1.9, dmg: 6, xp: 1, flip: false, ghost: true },
   { key: 'tybalt', model: true, h: 2.3, r: 0.8, hp: 200, speed: 2.5, dmg: 18, xp: 0, boss: true, label: '提伯尔特' },
+  { key: 'caliban', model: true, h: 2.7, r: 1.0, hp: 240, speed: 2.2, dmg: 16, xp: 0, boss: true, label: '卡利班' },
 ];
-const HP_ADD = [1, 0, 3, 0, 1, 0, 0];   // 每往后一幕，怪多几点血
+const HP_ADD = [1, 0, 3, 0, 1, 0, 0, 0];   // 每往后一幕，怪多几点血
 const T = Object.fromEntries(TYPES.map((t, i) => [t.key, i]));
 function billboardGeo(w, h, centerY) {
   const g = new THREE.PlaneGeometry(w, h); g.translate(0, centerY ? 0 : h / 2, 0); g.rotateX(-PITCH); return g;
@@ -427,6 +494,62 @@ const enemyMeshes = TYPES.map((t) => {
   m.count = 0; m.frustumCulled = false; scene.add(m);
   return m;
 });
+// 3D 怪（Tripo 生成，assets/models/monsters/）：把走路动作烘成 8 个姿势，每个姿势一个实例化网格。
+// 几百只怪只要在 CPU 上挑每只用哪个姿势，不用每帧算骨骼，手机跑得动。模型没加载好时先用上面的立牌。
+// yaw：把模型的正面转到 +Z（tools/mock/monsters.html 四个方向看过：鲁特琴、鼓、亡魂、三头犬的脸朝 +X，鸟嘴面具和号角朝 -Z）
+const MON = { lute: { yaw: -Math.PI / 2 }, birdhead: { yaw: Math.PI }, drum: { yaw: -Math.PI / 2 }, horn: { yaw: Math.PI }, shade: { yaw: -Math.PI / 2 }, cerberus: { yaw: -Math.PI / 2 } };
+const monFrames = [];   // monFrames[类型] = { meshes, n, dur }
+async function bakeMonster(ty) {
+  const t = TYPES[ty], cfg = MON[t.key];
+  const g = await new GLTFLoader().loadAsync(`assets/models/monsters/${t.key}.glb`);
+  const root = g.scene; root.updateMatrixWorld(true);
+  let mesh = null; root.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
+  const clip = g.animations[0]; let mixer = null;
+  if (clip && mesh.isSkinnedMesh) {
+    const hip = mesh.skeleton.bones.find((b) => /Hip/i.test(b.name));
+    if (hip) fixHip(clip, [hip.position.x, hip.position.y, hip.position.z]);
+    mixer = new THREE.AnimationMixer(root); mixer.clipAction(clip).play();
+  }
+  const N = mixer ? 8 : 1, pos = mesh.geometry.attributes.position, n = pos.count, v = new THREE.Vector3(), raw = [];
+  for (let f = 0; f < N; f++) {
+    if (mixer) { mixer.setTime(clip.duration * f / N); root.updateMatrixWorld(true); }
+    const out = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { mesh.getVertexPosition(i, v); v.applyMatrix4(mesh.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; }
+    raw.push(out);
+  }
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9; const a0 = raw[0];
+  for (let i = 0; i < n; i++) { const x = a0[i * 3], y = a0[i * 3 + 1], z = a0[i * 3 + 2]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const sc = t.h / (y1 - y0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, cy = Math.cos(cfg.yaw), sy = Math.sin(cfg.yaw);
+  const map = mesh.material.map;
+  const mat = new THREE.MeshLambertMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.2 });
+  const meshes = raw.map((out) => {
+    for (let i = 0; i < n; i++) {
+      const x = (out[i * 3] - cx) * sc, y = (out[i * 3 + 1] - y0) * sc, z = (out[i * 3 + 2] - cz) * sc;
+      out[i * 3] = x * cy + z * sy; out[i * 3 + 1] = y; out[i * 3 + 2] = -x * sy + z * cy;
+    }
+    const g2 = new THREE.BufferGeometry();
+    g2.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    if (mesh.geometry.attributes.uv) g2.setAttribute('uv', mesh.geometry.attributes.uv);
+    if (mesh.geometry.index) g2.setIndex(mesh.geometry.index);
+    g2.computeVertexNormals();
+    const m = new THREE.InstancedMesh(g2, mat, MAX_E);
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_E * 3).fill(1), 3);
+    m.count = 0; m.frustumCulled = false; m.visible = false; scene.add(m);
+    return m;
+  });
+  monFrames[ty] = { meshes, n: N, dur: clip ? clip.duration : 1 };
+  if (enemyMeshes[ty]) enemyMeshes[ty].visible = false;
+}
+function loadMonsters() { return Promise.all(TYPES.map((t, ty) => (MON[t.key] ? bakeMonster(ty).catch((e) => console.warn('怪物模型加载失败，用立牌', t.key, e)) : null))); }
+// 写实例矩阵：绕 Y 轴转 yaw，统一缩放 s
+function writeMatrixY(arr, i, x, y, z, s, yaw) {
+  const c = Math.cos(yaw) * s, n = Math.sin(yaw) * s, o = i * 16;
+  arr[o] = c; arr[o + 1] = 0; arr[o + 2] = -n; arr[o + 3] = 0;
+  arr[o + 4] = 0; arr[o + 5] = s; arr[o + 6] = 0; arr[o + 7] = 0;
+  arr[o + 8] = n; arr[o + 9] = 0; arr[o + 10] = c; arr[o + 11] = 0;
+  arr[o + 12] = x; arr[o + 13] = y; arr[o + 14] = z; arr[o + 15] = 1;
+}
 const shadowTex = canvasTex(64, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(0,0,0,.6)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, s, s); });
 function flatInst(geo, mat, max) {
   const m = new THREE.InstancedMesh(geo, mat, max); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; scene.add(m); return m;
@@ -454,18 +577,26 @@ function ring(x, z, r, life = 0.45) {
 // 主角脚下一圈暖光，让他在暗处跳出来
 const heroGlow = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2), additive(glowTex('255,184,92'), 0.42));
 heroGlow.position.y = 0.03; scene.add(heroGlow);
+// 第二部：精灵爱丽儿，一团淡蓝色的光，绕着罗密欧飞
+const ariel = new THREE.Group();
+{ const m1 = new THREE.Mesh(billboardGeo(1.3, 1.3, true), additive(glowTex('170,225,255'), 0.95)); const m2 = new THREE.Mesh(billboardGeo(0.5, 0.5, true), additive(glowTex('255,255,255'), 1)); ariel.add(m1, m2); }
+ariel.visible = false; scene.add(ariel);
 
 // ---------- 角色模型 ----------
 const loader = new GLTFLoader();
 async function loadModel(name, height) {
   const g = await loader.loadAsync(`assets/models/${name}.glb`);
-  const obj = g.scene;
+  const obj = g.scene; brighten(obj);
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const s = height / size.y;
   obj.scale.setScalar(s); obj.position.set(-c.x * s, -box.min.y * s, -c.z * s);
   const wrap = new THREE.Group(), inner = new THREE.Group();
   inner.add(obj); wrap.add(inner); wrap.userData.inner = inner;
   return wrap;
+}
+// 角色在暗处也看得清：把颜色贴图也当成一点自发光（10-31 用户说模型很精美，游戏里却看不出来）
+function brighten(obj, k = 0.22) {
+  obj.traverse((o) => { if (o.isMesh && o.material && o.material.map) { o.material.emissive = new THREE.Color(0xffffff); o.material.emissiveMap = o.material.map; o.material.emissiveIntensity = k; } });
 }
 // 绑了骨骼、带动作的角色（Tripo 自动绑骨加动作，assets/models/anim/）。
 // Tripo 的走路和跑步动作把髋部整体挪开了一米多（"原地播放"留下的偏移），这里把髋部的位置轨道平移回站立时的位置，只留上下起伏。
@@ -482,6 +613,7 @@ async function loadAnimated(name, height) {
   const g = await loader.loadAsync(`assets/models/anim/${name}.glb`);
   const obj = g.scene;
   obj.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });   // 蒙皮网格按绑定姿势算包围球，动起来会被误裁掉
+  brighten(obj);
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const s = height / size.y;
   obj.scale.setScalar(s); obj.position.set(-c.x * s, -box.min.y * s, -c.z * s);
@@ -505,7 +637,7 @@ function playAnim(w, name, { fade = 0.22, once = false, speed = 1 } = {}) {
   if (u.cur && u.actions[u.cur]) u.actions[u.cur].fadeOut(fade);
   u.cur = name;
 }
-let hero = null, juliet = null, tybalt = null, mercutio = null;
+let hero = null, juliet = null, tybalt = null, mercutio = null, caliban = null;
 
 // ---------- 数据 ----------
 const E = { n: 0, type: new Uint8Array(MAX_E), x: new Float32Array(MAX_E), z: new Float32Array(MAX_E), hp: new Float32Array(MAX_E),
@@ -559,6 +691,7 @@ function director(dt) {
   if (act === 2) { director2(dt); return; }
   if (act === 3) { director3(dt); return; }
   if (act === 4) { director4(dt); return; }
+  if (act === 5) { director5(dt); return; }
   const target = act1Target(actTime) * (lowHp() ? 0.75 : 1);   // 血少时悄悄少出一点
   spawnAcc += dt * (actTime < 20 ? 2 : 6);
   while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n < target) spawnEnemy(T.lute); }
@@ -618,6 +751,24 @@ function director3(dt) {
     setTimeout(() => { if (act === 3 && phase === 'fight') bark(BOSS_LINES.tybaltIn2.who, BOSS_LINES.tybaltIn2.text); }, 2400);
   }
 }
+// 第二部「漂岛」：被冲上岸的乐器、成群的海鸟、海浪精灵（亡魂的样子），第 22 秒卡利班出场
+function director5(dt) {
+  const boss = dogSpawned && !dogDown;
+  const target = (actTime < 12 ? 6 + actTime * 1.2 : 20 + actTime * 0.7) * (boss ? 0.5 : 1) * (lowHp() ? 0.75 : 1);
+  spawnAcc += dt * 6;
+  while (spawnAcc >= 1) { spawnAcc -= 1; if (E.n >= target) continue; const r = Math.random(); spawnEnemy(r < 0.4 ? T.shade : r < 0.75 ? T.lute : T.drum); }
+  if (!boss && actTime > 8 + birdWaves * 7) {
+    birdWaves++;
+    const a = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 7 + birdWaves * 2; k++) spawnEnemy(T.birdhead, a + (Math.random() - 0.5) * 0.5, 17 + Math.random() * 3);
+  }
+  if (!dogSpawned && actTime >= Math.min(22, ACT_LEN * 0.5)) {
+    dogSpawned = true; bossChargeCd = 3; tybaltHalfSaid = false;
+    spawnEnemy(T.caliban, Math.PI, 14);
+    bark(TP_BOSS.in.who, TP_BOSS.in.text);
+    setTimeout(() => { if (act === 5 && phase === 'fight') bark(TP_BOSS.in2.who, TP_BOSS.in2.text); }, 2400);
+  }
+}
 // 第四幕：亡魂从四面八方涌向石台上的朱丽叶，也有一些家丁冲着罗密欧来
 function director4(dt) {
   const target = (16 + actTime * 0.9) * (lowHp() ? 0.8 : 1);
@@ -634,9 +785,9 @@ function killEnemy(i) {
   if (t.boss) {   // Boss 被打动：散出一大圈萤火
     dogDown = true;
     for (let k = 0; k < 26 && O.n < MAX_O; k++) { const a = k / 26 * 6.28, d = 1 + Math.random() * 2, j = O.n++; O.x[j] = E.x[i] + Math.cos(a) * d; O.z[j] = E.z[i] + Math.sin(a) * d; O.v[j] = 1; O.t[j] = Math.random() * 6; }
-    if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : BOSS_LINES.dogDown; bark(L.who, L.text); }
+    if (phase === 'fight' || phase === 'levelup') { const L = t.key === 'tybalt' ? BOSS_LINES.tybaltDown : t.key === 'caliban' ? TP_BOSS.down : BOSS_LINES.dogDown; bark(L.who, L.text); }
     ring(E.x[i], E.z[i], 6, 0.8);
-  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
+  } else if (O.n < MAX_O) { const k = O.n++; O.x[k] = E.x[i]; O.z[k] = E.z[i]; O.v[k] = t.xp * [1, 1, 1.2, 1.5, 1.5, 1.2][act]; O.t[k] = Math.random() * 6; }   // 后面几幕每只怪给的经验多一点
   const j = --E.n;
   for (const a of [E.type, E.x, E.z, E.hp, E.flash, E.phase, E.speed, E.id, E.ocd, E.face, E.atk]) a[i] = a[j];
   kills++;
@@ -719,10 +870,27 @@ ui.innerHTML = `
 <div id="acttitle" class="hide"><b></b></div>
 <div id="calm" class="hide"><b>朱丽叶的安稳</b><div class="bossbar"><i></i></div></div>
 <div id="bark" class="hide"><img alt=""><div><b></b><span></span></div></div>
-<div id="dlg" class="hide" data-ui><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
+<div id="dlg" class="hide" data-ui><div class="cg hide"><img alt=""></div><div class="por"><img alt=""></div><div class="box"><b class="who"></b><div class="txt"></div><i class="more">▼</i></div><button class="skip">跳过 ›</button></div>
 <div id="cards" class="hide" data-ui><h2></h2><div class="row"></div></div>
 <div id="art" class="hide" data-ui><div class="frame"><img alt=""></div><div class="info"><h2></h2><p class="by"></p><p class="where"></p><ul></ul><div class="btns"></div></div></div>
-<div id="title" data-ui><h1>罗密欧与朱丽叶</h1><p class="sub">用情歌打怪，改写莎士比亚的结局</p><p class="go">加载中……</p><p class="tip">横屏 · 左手拖着走 · 右手拖着瞄（不碰会自动唱）</p><p class="ver">${VERSION} 开发中：四幕都能玩了</p><p class="fshint hide"></p></div>
+<div id="title" data-ui><div class="tbg"><img alt="" src="assets/cg/key-rj.jpg"></div>
+ <div class="thead"><h1>莎士比亚的两场戏</h1><p class="sub">用一首情歌，改写莎士比亚的结局</p></div>
+ <div class="stories">
+  <div class="story" data-s="rj"><img alt="" src="assets/cg/key-rj.jpg"><div class="st"><b>第一部 · 罗密欧与朱丽叶</b><small>舞会 · 阳台 · 决斗 · 墓室</small><div class="sb"></div></div></div>
+  <div class="story" data-s="tp"><img alt="" src="assets/cg/key-tp.jpg"><div class="st"><b>第二部 · 暴风雨</b><small>新 · 海上的魔法岛</small><div class="sb"></div></div></div>
+ </div>
+ <div class="tfoot"><span class="hello"></span><button class="b-mem">回忆</button><button class="b-how">怎么玩</button><button class="b-name">起个名字</button></div>
+ <p class="go">加载中……</p><p class="ver">${VERSION} 开发中</p><p class="fshint hide"></p></div>
+<div id="over" class="hide" data-ui><h1></h1><p class="sub"></p><p class="tip"></p><div class="btns"></div></div>
+<div id="cast" class="hide" data-ui><h2>人物关系</h2><div class="row"></div><p class="hint">点一下继续</p></div>
+<div id="mem" class="hide" data-ui><div class="inner"><h2></h2><p class="stat"></p><h3>名画</h3><div class="grid g-paint"></div><h3>插图</h3><div class="grid g-cg"></div><h3>你说过的情话</h3><ul class="said"></ul><div class="btns"><button class="b-back">返回</button><button class="b-clear">清空存档</button></div></div></div>
+<div id="how" class="hide" data-ui><div class="inner"><h2>怎么玩</h2><ul>
+ <li><b>左手</b>在屏幕左半边按住拖动：走。</li><li><b>右手</b>在右半边按住拖动：朝那个方向唱歌（射出音符）。右手不碰时，会自动唱给最近的怪。</li>
+ <li>怪被歌声打动，会变成<b>萤火</b>，捡起来升级。每次升级从<b>三首新歌</b>里选一首，选完会震开身边一圈怪。</li>
+ <li>每一幕打完，会看到这一幕故事的<b>名画</b>和插图；幕和幕之间，你替罗密欧<b>选一句情话</b>，那句情话就是一首新歌。</li>
+ <li>第一部的最后一幕：守住沉睡的朱丽叶，就能<b>改写结局</b>。</li>
+ <li>进度存在这台手机里，下次打开能从上次那一幕<b>继续</b>。</li></ul><div class="btns"><button class="b-back">返回</button></div></div></div>
+<div id="viewer" class="hide" data-ui><img alt=""></div>
 <div id="tools" class="hide"><button class="b-pause">暂停</button><button class="b-mute">声音 开</button></div>
 <div id="pause" class="hide" data-ui><h2>暂停</h2><button class="b-resume">继续</button><button class="b-restart">从头开始</button></div>
 <div id="fps" class="${DEBUG ? '' : 'hide'}"></div>`;
@@ -741,16 +909,37 @@ function bark(who, text) {
 
 // 幕间对话：点一下出下一句
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function setCG(name) {
+  const box = $('#dlg .cg'), img = box.querySelector('img');
+  if (!name) { show(box, false); return; }
+  img.src = `assets/cg/${name}.jpg`; show(box);
+  box.classList.remove('kb'); void box.offsetWidth; box.classList.add('kb');
+  unlock('cgs', name);
+}
+function showCast() {
+  return new Promise((resolve) => {
+    const el = $('#cast'), row = el.querySelector('.row');
+    row.innerHTML = CAST.map((c) => `<div class="c"><img alt="" src="${PEOPLE[c.who].img}"><b>${PEOPLE[c.who].name}</b><small>${c.line}</small></div>`).join('');
+    show(el);
+    const done = () => { el.onclick = null; show(el, false); resolve(); };
+    setTimeout(() => { el.onclick = done; }, 400);
+    if (AUTO) setTimeout(done, 60);
+  });
+}
 async function playScene(lines) {
   const el = $('#dlg'); let skip = false;
   el.querySelector('.skip').onclick = (e) => { e.stopPropagation(); skip = true; advance && advance(); };
   let advance = null;
   el.onclick = () => advance && advance();
+  setCG(null);
   show(el);
   for (const line of lines) {
     if (line.choice) { show(el, false); await chooseCards(line.choice, true); show(el); continue; }
+    if ('cg' in line) { setCG(line.cg); continue; }
+    if (line.cast) { if (!skip) await showCast(); continue; }
+    if (line.painting) { show(el, false); await paintingCard(line.painting, { buttons: [['继续', 'go']] }); show(el); continue; }
     if (skip) continue;
-    const [who, text] = line, p = PEOPLE[who];
+    const [who, raw] = line, p = PEOPLE[who], text = raw.replace(/\{你\}/g, save.name || '你');
     el.className = 'side-' + p.side;
     el.querySelector('.por img').src = p.img || '';
     el.querySelector('.who').textContent = p.name;
@@ -762,6 +951,7 @@ async function playScene(lines) {
       if (AUTO) setTimeout(() => { done = true; advance && advance(); }, 30);
     });
   }
+  setCG(null);
   show(el, false);
 }
 
@@ -779,7 +969,7 @@ function chooseCards(title, isChoice) {
       b.innerHTML = isChoice
         ? `<q>${LOVE[k.id]}</q><b>${k.name}</b><small>${k.desc[lv]}</small>`
         : `<b>${k.name}</b><em>${lv ? `${lv} 级 → ${lv + 1} 级` : '新技能'}</em><small>${k.desc[lv]}</small><q>${LOVE[k.id]}</q>`;
-      b.onclick = () => { show(el, false); takeSkill(k.id); resolve(k.id); };
+      b.onclick = () => { show(el, false); takeSkill(k.id); if (isChoice) recordChoice(title, LOVE[k.id], k.name); resolve(k.id); };
       row.appendChild(b);
       if (AUTO && idx === 0) setTimeout(() => b.click(), 60);
     });
@@ -797,6 +987,7 @@ function takeSkill(id) {
 function paintingCard(act, opts) {
   return new Promise((resolve) => {
     const p = PAINTINGS[act], el = $('#art');
+    unlock('paintings', String(act));
     el.querySelector('img').src = p.img;
     el.querySelector('h2').textContent = p.title;
     el.querySelector('.by').textContent = p.by;
@@ -820,21 +1011,39 @@ const ACTS = {
   2: { name: '第二幕 · 阳台', lines: ACT2_LINES },
   3: { name: '第三幕 · 决斗', lines: ACT3_LINES },
   4: { name: '第四幕 · 墓室', lines: ACT4_LINES },
+  5: { name: '第二部 · 漂岛', lines: TP_LINES },
 };
+const storyOf = (n) => (n <= 4 ? 'rj' : 'tp');
 const ACT_NO = ['', '第一', '第二', '第三', '第四'];
-async function startRun(again) {
+// 开始一个故事。from = 从第几幕开始（继续存档时 > 1）；again = 倒下后从头再来，不再放开场对话
+async function startStory(story, from, again) {
   resetRun();
-  show($('#title'), false);
+  show($('#title'), false); show($('#over'), false);
   phase = 'story';
+  if (!again) { save.plays++; persist(); }
+  if (story === 'tp') {
+    if (!again) await playScene(SCENES.tpIntro);
+    beginAct(5); return;
+  }
+  const snap = from > 1 && save.rj.snaps[from];
+  if (snap) {   // 继续：恢复那一幕开头的等级和技能
+    const d = structuredClone(snap); stats = { ...baseStats(), ...d.stats }; levels = d.levels; level = d.level; xp = d.xp;
+    player.hp = maxHp(); beginAct(from); return;
+  }
   if (START_ACT > 1 && !again) {   // 测试用：直接从后面的幕开始，先送几级
     for (const id of ['chord', 'presto', 'sustain', 'chord']) { takeSkill(id); level++; }
+    if (START_ACT === 5) { beginAct(5); return; }
   } else if (!again) await playScene(SCENES.prologue);
   beginAct(again ? 1 : START_ACT);
 }
+const startRun = (again) => startStory('rj', 1, again);
 function beginAct(n, retry) {
   act = n;
   if (retry && snapshot) { ({ stats, levels, level, xp } = structuredClone(snapshot)); player.hp = maxHp(); }
-  else snapshot = structuredClone({ stats, levels, level, xp });
+  else {
+    snapshot = structuredClone({ stats, levels, level, xp });
+    const st = save[storyOf(n)]; st.snaps[n] = snapshot; st.reached = Math.max(st.reached, n); persist();   // 存档：下次能从这一幕继续
+  }
   E.n = B.n = O.n = 0; if (retry) pendingLevels = 0;   // 上一幕结束时攒下的升级，这一幕一开打就选
   player.x = player.z = 0; player.aimX = 0; player.aimZ = 1; player.hurtCd = 0;
   if (n > 1 && !retry) player.hp = Math.min(maxHp(), player.hp + maxHp() * 0.35);   // 每一幕开头回一点血
@@ -845,6 +1054,7 @@ function beginAct(n, retry) {
   if (mercutio) { mercutio.visible = n === 3; mercutio.position.set(-1.6, 0, 1.2); mercutio.userData.inner.rotation.set(0, 0, 0); }
   if (n === 4) { player.z = 3.2; if (juliet) { juliet.visible = true; layJuliet(true); } }
   setAct(n);
+  camDist = 0.45;   // 每一幕开头镜头贴近主角，再拉到打斗的高度
   $('#actinfo b').textContent = ACTS[n].name;
   show($('#bars')); show($('#actinfo')); show($('#tools'));
   const at = $('#acttitle'); at.querySelector('b').textContent = ACTS[n].name; show(at); at.classList.remove('pop'); void at.offsetWidth; at.classList.add('pop');
@@ -875,14 +1085,14 @@ async function endAct(good) {
   await sleep(AUTO ? 50 : 1400);
   flushOrbs();
   show($('#bars'), false); show($('#actinfo'), false); show($('#bark'), false); show($('#tools'), false);
-  await playScene(SCENES[`act${act}End`]);
+  await playScene(SCENES[act === 5 ? 'tpEnd' : `act${act}End`]);
   phase = 'card';
   stage.classList.add('freeze');
   await sleep(AUTO ? 50 : 900);
-  await paintingCard(act, { buttons: [['继续', 'go']] });
+  await paintingCard(act === 5 ? 'tp1' : act, { buttons: [['继续', 'go']] });
   stage.classList.remove('freeze');
-  await playScene(SCENES[`act${act}To${act + 1}`]);
-  if (ACTS[act + 1]) beginAct(act + 1);
+  if (SCENES[`act${act}To${act + 1}`]) await playScene(SCENES[`act${act}To${act + 1}`]);
+  if (act < 4 && ACTS[act + 1]) beginAct(act + 1);
   else paintingCardEnd();
 }
 // 第四幕的两种结局
@@ -900,32 +1110,37 @@ async function tombEnding(good) {
   phase = 'card'; stage.classList.add('freeze');
   await sleep(AUTO ? 50 : 900);
   if (good) {
+    unlock('endings', 'good');
     await paintingCard('good', { lead: '你守住了朱丽叶，改写了莎士比亚的结局。', buttons: [['看结尾', 'go']] });
     stage.classList.remove('freeze'); bierLight.intensity = 22;
     theEnd(true);
   } else {
+    unlock('endings', 'bad');
     const v = await paintingCard('bad', { lead: '莎士比亚写下的结局就是这样。再来一次，改写它？', buttons: [['从这一幕重来', 'act'], ['从头开始', 'all']] });
     stage.classList.remove('freeze');
     if (v === 'act') beginAct(4, true); else startRun(true);
   }
 }
-function theEnd() {
+// 结束画面：标题、一句话、这一局的成绩、按钮
+function endScreen(h1, sub, buttons) {
   phase = 'over';
-  const el = $('#title');
-  el.querySelector('h1').textContent = '全剧终';
-  el.querySelector('.sub').textContent = '这一次，罗密欧和朱丽叶都活了下来。';
-  el.querySelector('.go').textContent = '点一下，再玩一次';
-  el.querySelector('.tip').textContent = `这一局：${level} 级，打动了 ${kills} 只怪`;
-  show(el); titleReady = true;
+  recordBest(kills, level);
+  const el = $('#over');
+  el.querySelector('h1').textContent = h1;
+  el.querySelector('.sub').textContent = sub;
+  el.querySelector('.tip').textContent = `这一局：${level} 级，打动了 ${kills} 只怪 · 一共演了 ${save.plays} 次`;
+  const b = el.querySelector('.btns'); b.innerHTML = '';
+  for (const [label, fn] of buttons) { const x = document.createElement('button'); x.textContent = label; x.onclick = () => { show(el, false); fn(); }; b.appendChild(x); }
+  show(el);
+  if (AUTO) setTimeout(() => {}, 0);
+}
+function theEnd() {
+  save.rj.done = true; persist();
+  endScreen('第一部 · 全剧终', '这一次，罗密欧和朱丽叶都活了下来。', [['进入第二部 · 暴风雨', () => startStory('tp')], ['回到开始画面', showTitle]]);
 }
 function paintingCardEnd() {
-  phase = 'over';
-  const el = $('#title');
-  el.querySelector('h1').textContent = `${ACT_NO[act]}幕 完`;
-  el.querySelector('.sub').textContent = ['', '', '第三幕「决斗」正在制作，先玩到这里。'][act] || '后面的几幕正在制作，先玩到这里。';
-  el.querySelector('.go').textContent = '点一下，再玩一次';
-  el.querySelector('.tip').textContent = `这一局：${level} 级，打动了 ${kills} 只怪`;
-  show(el); titleReady = true;
+  if (act === 5) endScreen('第二部 · 第一幕 完', '下一幕正在制作，先演到这里。', [['回到开始画面', showTitle]]);
+  else endScreen(`${ACT_NO[act]}幕 完`, '后面的几幕正在制作，先玩到这里。', [['回到开始画面', showTitle]]);
 }
 async function die() {
   phase = 'dead';
@@ -934,8 +1149,10 @@ async function die() {
   show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false);
   await playScene([['narrator', DEATH[act]]]);
   const btns = act > 1 ? [['从这一幕重来', 'act'], ['从头开始', 'all']] : [['再来一次', 'all']];
-  const v = await paintingCard(act === 4 ? 'bad' : act, { lead: `你在${ACT_NO[act]}幕倒下了。先看看这一幕的名画：`, buttons: btns });   // 第四幕没有单独的画，用原版结局那幅
-  if (v === 'act') beginAct(act, true); else startRun(true);
+  recordBest(kills, level);
+  const btns2 = act === 5 ? [['再来一次', 'act'], ['回到开始画面', 'title']] : [...btns, ['回到开始画面', 'title']];
+  const v = await paintingCard(act === 4 ? 'bad' : act === 5 ? 'tp1' : act, { lead: `你在${act === 5 ? '漂岛' : ACT_NO[act] + '幕'}倒下了。先看看这一幕的名画：`, buttons: btns2 });   // 第四幕没有单独的画，用原版结局那幅
+  if (v === 'act') beginAct(act, true); else if (v === 'title') showTitle(); else startRun(true);
 }
 
 // ---------- 每一帧 ----------
@@ -972,6 +1189,7 @@ function step(dt) {
       if (!saidCalmHalf && calm < 50) { saidCalmHalf = true; bark(BOSS_LINES.calmHalf.who, BOSS_LINES.calmHalf.text); }
       if (!saidCalmLow && calm < 20) { saidCalmLow = true; bark(BOSS_LINES.calmLow.who, BOSS_LINES.calmLow.text); }
     } else if (actTime >= ACT_LEN && (act === 1 || dogDown)) { endAct(); return; }
+    if (act === 5 && dogSpawned && !dogDown && !tybaltHalfSaid) { const bi = bossIndex(); if (bi >= 0 && E.hp[bi] < TYPES[T.caliban].hp / 2) { tybaltHalfSaid = true; bark(TP_BOSS.half.who, TP_BOSS.half.text); } }
     if (act === 3 && dogSpawned && !dogDown && !tybaltHalfSaid) {
       const bi = bossIndex(); if (bi >= 0 && E.hp[bi] < TYPES[T.tybalt].hp / 2) { tybaltHalfSaid = true; bark(BOSS_LINES.tybaltHalf.who, BOSS_LINES.tybaltHalf.text); }
     }
@@ -1000,7 +1218,7 @@ function step(dt) {
     if (E.flash[i] > 0) E.flash[i] -= dt;
     if (E.ocd[i] > 0) E.ocd[i] -= dt;
     if (E.atk[i] > 0) E.atk[i] -= dt;
-    if (t.ghost && d > 2.2) {   // 亡魂飘向石台上的朱丽叶；罗密欧挡在身边时改去缠他
+    if (t.ghost && act === 4 && d > 2.2) {   // 亡魂飘向石台上的朱丽叶；罗密欧挡在身边时改去缠他
       const gx = -E.x[i], gz = -E.z[i], gd = Math.hypot(gx, gz) || 1, reach = BIER_R + t.r + 0.05;
       const st = Math.min(E.speed[i] * dt, Math.max(0, gd - reach));
       E.x[i] += gx / gd * st; E.z[i] += gz / gd * st;
@@ -1193,22 +1411,37 @@ function writeMatrix(arr, i, x, y, z, sx, sy, sz) {
   arr[o + 8] = 0; arr[o + 9] = 0; arr[o + 10] = sz; arr[o + 11] = 0;
   arr[o + 12] = x; arr[o + 13] = y; arr[o + 14] = z; arr[o + 15] = 1;
 }
-const counts = new Int32Array(TYPES.length);
+const counts = new Int32Array(TYPES.length), fcounts = new Int32Array(TYPES.length * 8);
 const camTarget = new THREE.Vector3();
 let camDist = 1;
 function draw(dt) {
-  counts.fill(0);
+  counts.fill(0); fcounts.fill(0);
   const sm = shadowMesh.instanceMatrix.array;
   for (let i = 0; i < E.n; i++) {
     const ty = E.type[i], t = TYPES[ty], m = enemyMeshes[ty], k = counts[ty]++;
     if (!m) {   // 提伯尔特：3D 模型
-      if (tybalt) {   // 提伯尔特：冲刺时跑，平时走，贴近罗密欧时挥剑
-        tybalt.visible = true; tybalt.position.set(E.x[i], 0, E.z[i]);
-        tybalt.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]);
+      const bm = t.key === 'caliban' ? caliban : tybalt;
+      if (bm) {   // Boss 的 3D 模型：冲刺时跑，平时走，贴近罗密欧时挥剑（没有这个动作就走）
+        bm.visible = true; bm.position.set(E.x[i], 0, E.z[i]);
+        bm.rotation.y = Math.atan2(player.x - E.x[i], player.z - E.z[i]) + (bm.userData.yaw || 0);
         const near = Math.hypot(player.x - E.x[i], player.z - E.z[i]) < 2.6;
-        playAnim(tybalt, near ? 'slash' : bossCharge > 0 ? 'run' : 'walk', { speed: near ? 1.6 : 1 });
-        tybalt.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : 1);
+        playAnim(bm, near && bm.userData.actions?.slash ? 'slash' : bossCharge > 0 && bm.userData.actions?.run ? 'run' : 'walk', { speed: near ? 1.6 : 1 });
+        bm.userData.inner.scale.setScalar(E.flash[i] > 0 ? 1.05 : 1);
+        if (!bm.userData.actions) bm.userData.inner.position.y = Math.abs(Math.sin(time * 6)) * 0.15;
       }
+      writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
+      continue;
+    }
+    const mf = monFrames[ty];
+    if (mf) {   // 3D 怪：按走路的节奏挑姿势，面朝前进的方向
+      counts[ty]--;
+      const f = mf.n > 1 ? Math.floor(((time / mf.dur) * 1.3 + E.phase[i]) * mf.n) % mf.n : 0;
+      const key = ty * 8 + f, k2 = fcounts[key]++, fm = mf.meshes[f];
+      const dx = (t.ghost && act === 4 ? -E.x[i] : player.x - E.x[i]), dz = (t.ghost && act === 4 ? -E.z[i] : player.z - E.z[i]);
+      const yaw = Math.atan2(dx, dz);
+      const bob = mf.n === 1 ? (t.ghost ? 0.25 + Math.sin(time * 3 + E.phase[i]) * 0.15 : Math.abs(Math.sin(time * 9 + E.phase[i])) * 0.15) : 0;
+      writeMatrixY(fm.instanceMatrix.array, k2, E.x[i], bob, E.z[i], 1, yaw + (mf.n === 1 && !t.ghost ? Math.sin(time * 9 + E.phase[i]) * 0.12 : 0));
+      const fl = E.flash[i] > 0 ? 2.4 : 1, col = fm.instanceColor.array; col[k2 * 3] = fl; col[k2 * 3 + 1] = fl; col[k2 * 3 + 2] = fl;
       writeMatrix(sm, i, E.x[i], 0.012, E.z[i], t.r * 3, 1, t.r * 2.1);
       continue;
     }
@@ -1222,6 +1455,9 @@ function draw(dt) {
   }
   if (tybalt && act === 3 && !(dogSpawned && !dogDown) && tybalt.visible) tybalt.visible = false;
   if (tybalt && tybalt.visible) tybalt.userData.mixer.update(dt);
+  if (caliban) { if (act !== 5 || !(dogSpawned && !dogDown)) caliban.visible = false; else if (caliban.userData.mixer) caliban.userData.mixer.update(dt); }
+  if (ariel.visible) { const a = time * 1.6; ariel.position.set(player.x + Math.cos(a) * 1.6, 1.9 + Math.sin(time * 3) * 0.25, player.z + Math.sin(a) * 1.0); }
+  monFrames.forEach((mf, ty) => { if (!mf) return; mf.meshes.forEach((m, f) => { const c = fcounts[ty * 8 + f]; m.count = c; m.visible = c > 0; if (c) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }); });
   enemyMeshes.forEach((m, ty) => { if (!m) return; m.count = counts[ty]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
   shadowMesh.count = E.n; shadowMesh.instanceMatrix.needsUpdate = true;
 
@@ -1298,7 +1534,7 @@ function draw(dt) {
 let pausedFrom = null;
 $('#tools .b-pause').onclick = () => { if (phase !== 'fight') return; pausedFrom = phase; phase = 'paused'; show($('#pause')); };
 $('#pause .b-resume').onclick = () => { show($('#pause'), false); phase = pausedFrom || 'fight'; pausedFrom = null; };
-$('#pause .b-restart').onclick = () => { show($('#pause'), false); pausedFrom = null; show($('#boss'), false); show($('#calm'), false); startRun(true); };
+$('#pause .b-restart').onclick = () => { show($('#pause'), false); pausedFrom = null; show($('#boss'), false); show($('#calm'), false); if (act === 5) startStory('tp', 1, true); else startRun(true); };
 $('#tools .b-mute').onclick = (e) => { muted = !muted; e.target.textContent = muted ? '声音 关' : '声音 开'; };
 
 // ---------- 全屏 ----------
@@ -1325,15 +1561,70 @@ function goFullscreen() {
 
 // ---------- 开始画面 ----------
 let titleReady = false;
-$('#title').onclick = () => { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); startRun(); };
+function go(story, from) { if (!titleReady) return; titleReady = false; initAudio(); if (!AUTO) goFullscreen(); show($('#title .fshint'), false); startStory(story, from); }
+// 开始画面：两个故事、继续、回忆、怎么玩、名字
+function refreshTitle() {
+  const hello = $('#title .hello');
+  hello.textContent = save.name ? `${save.name}，欢迎回来` + (save.plays ? ` · 已经演了 ${save.plays} 次` : '') : (save.plays ? `欢迎回来 · 已经演了 ${save.plays} 次` : '欢迎来到剧场');
+  $('#title .b-name').textContent = save.name ? '改名字' : '起个名字';
+  const rjb = $('#title .story[data-s=rj] .sb'), tpb = $('#title .story[data-s=tp] .sb');
+  const btn = (label, fn, main) => { const b = document.createElement('button'); b.textContent = label; if (main) b.className = 'main'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+  rjb.innerHTML = ''; tpb.innerHTML = '';
+  const r = save.rj.reached;
+  if (r > 1 && save.rj.snaps[r]) { rjb.append(btn(`继续 · ${ACT_NO[r]}幕`, () => go('rj', r), true), btn('从头开始', () => go('rj', 1))); }
+  else rjb.append(btn('开始演出', () => go('rj', 1), true));
+  tpb.append(btn('开始演出', () => go('tp'), true));
+  $('#title .go').textContent = titleReady ? '' : '加载中……';
+  $('#title').classList.toggle('loading', !titleReady);
+}
+function showTitle() {
+  phase = 'title'; resetRun(); setAct(1);
+  show($('#over'), false); show($('#bars'), false); show($('#actinfo'), false); show($('#tools'), false); show($('#boss'), false); show($('#calm'), false);
+  titleReady = true; refreshTitle(); show($('#title'));
+}
+$('#title .b-name').onclick = () => {
+  const n = (prompt('你叫什么名字？（会存在这台手机里，结局里会写上你的名字）', save.name) || '').trim().slice(0, 12);
+  if (n || n === '') { save.name = n; persist(); refreshTitle(); }
+};
+$('#title .b-how').onclick = () => show($('#how'));
+$('#how .b-back').onclick = () => show($('#how'), false);
+const CG_ALL = ['rj-01-feud', 'rj-02-ball', 'rj-03-first-sight', 'rj-04-palms', 'rj-05-balcony', 'rj-06-wedding', 'rj-07-duel', 'rj-08-mercutio-falls', 'rj-09-potion', 'rj-10-tomb', 'rj-11-sail-away', 'tp-01-storm', 'tp-02-shore', 'tp-03-ariel', 'tp-04-caliban', 'tp-05-reunion'];
+const PAINT_ALL = ['1', '2', '3', 'bad', 'good', 'tpw', 'tp1'];
+function openMemories() {
+  const el = $('#mem');
+  el.querySelector('h2').textContent = `${save.name || '你'}的回忆`;
+  const ends = [save.endings.includes('good') ? '改写的结局 ✓' : '改写的结局 ？', save.endings.includes('bad') ? '原版的结局 ✓' : '原版的结局 ？'];
+  el.querySelector('.stat').textContent = `演了 ${save.plays} 次 · 最多一局打动 ${save.best.kills} 只怪 · 最高 ${save.best.level} 级 · ${ends.join(' · ')}`;
+  const gp = el.querySelector('.g-paint'); gp.innerHTML = '';
+  for (const k of PAINT_ALL) {
+    const d = document.createElement('div'); d.className = 'cell';
+    if (save.paintings.includes(k)) { d.innerHTML = `<img alt="" src="${PAINTINGS[k].img}">`; d.onclick = () => { show(el, false); paintingCard(k, { buttons: [['返回', 'go']] }).then(() => show(el)); }; }
+    else d.innerHTML = '<span>？</span>';
+    gp.appendChild(d);
+  }
+  const gc = el.querySelector('.g-cg'); gc.innerHTML = '';
+  for (const k of CG_ALL) {
+    const d = document.createElement('div'); d.className = 'cell wide';
+    if (save.cgs.includes(k)) { d.innerHTML = `<img alt="" src="assets/cg/${k}.jpg">`; d.onclick = () => { const v = $('#viewer'); v.querySelector('img').src = `assets/cg/${k}.jpg`; show(v); }; }
+    else d.innerHTML = '<span>？</span>';
+    gc.appendChild(d);
+  }
+  const said = el.querySelector('.said');
+  said.innerHTML = save.choices.length ? save.choices.slice().reverse().map((c) => `<li><small>${c.q}</small>“${c.a}”</li>`).join('') : '<li><small>还没有。在幕和幕之间替罗密欧选一句情话，就会记在这里。</small></li>';
+  show(el);
+}
+$('#title .b-mem').onclick = openMemories;
+$('#mem .b-back').onclick = () => show($('#mem'), false);
+$('#mem .b-clear').onclick = () => { if (confirm('清空这台手机上的存档和回忆？')) { resetSave(); show($('#mem'), false); refreshTitle(); } };
+$('#viewer').onclick = () => show($('#viewer'), false);
 
-Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95), loadAnimated('tybalt', 2.3), loadAnimated('mercutio', 1.85)]).then(([h, j, t, m]) => {
-  hero = h; juliet = j; tybalt = t; mercutio = m;
-  scene.add(hero, juliet, tybalt, mercutio);
-  juliet.visible = tybalt.visible = mercutio.visible = false;
+Promise.all([loadAnimated('romeo', 1.9), loadModel('wedding-dress', 1.95), loadAnimated('tybalt', 2.3), loadAnimated('mercutio', 1.85), loadAnimated('caliban', 2.7).catch(() => null), loadMonsters()]).then(([h, j, t, m, c]) => {
+  hero = h; juliet = j; tybalt = t; mercutio = m; caliban = c;
+  scene.add(hero, juliet, tybalt, mercutio); if (caliban) scene.add(caliban);
+  juliet.visible = tybalt.visible = mercutio.visible = false; if (caliban) caliban.visible = false;
   titleReady = true;
-  $('#title .go').textContent = '点一下开始';
-  if (AUTO) $('#title').click();
+  refreshTitle();
+  if (AUTO) go(START_ACT === 5 ? 'tp' : 'rj', 1);
 }).catch((e) => { $('#title .go').textContent = '加载失败，请刷新：' + e.message; console.error(e); });
 
 // 给自动测试用的接口

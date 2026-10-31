@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>怪物朝向</title>
+<style>html,body{margin:0;background:#fff;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../../vendor/three/three.module.js", "three/addons/": "../../vendor/three/addons/" } }</script>
+</head><body>
+<script type="module">
+// 检查 3D 怪的正面朝哪：每列一只怪，四行是镜头分别在 +Z、+X、-Z、-X 方向看过去。哪一行看到脸，脸就朝那个方向。
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const N = ['lute', 'birdhead', 'drum', 'horn', 'shade', 'cerberus'];
+const W = innerWidth, H = innerHeight, cw = W / N.length, ch = H / 4;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true);
+document.body.appendChild(r.domElement);
+const loader = new GLTFLoader();
+const objs = await Promise.all(N.map((n) => loader.loadAsync(`../../assets/models/monsters/${n}.glb`).then((g) => g.scene)));
+const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 100);
+objs.forEach((o, i) => {
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.4));
+  scene.add(o);
+  const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z) * 2.4;
+  [[0, 1], [1, 0], [0, -1], [-1, 0]].forEach(([dx, dz], row) => {
+    cam.position.set(c.x + dx * d, c.y + s.y * 0.2, c.z + dz * d); cam.lookAt(c);
+    const x = i * cw, y = H - (row + 1) * ch;
+    r.setViewport(x, y, cw, ch); r.setScissor(x, y, cw, ch); r.render(scene, cam);
+  });
+});
+document.title = 'ready';
+</script>
+</body></html>
